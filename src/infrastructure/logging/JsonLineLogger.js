@@ -11,6 +11,7 @@ const MAX_ITENS = 50;
 const MAX_CHAVES = 100;
 const MAX_PROFUNDIDADE = 6;
 const MAX_LINHA = 64 * 1024;
+const MAX_NOS = 2000; // orçamento de trabalho: evita explosão multiplicativa antes do teto da linha
 const MARCA = '…[truncado]';
 const ILEGIVEL = '[erro ao ler]';
 
@@ -84,7 +85,9 @@ class JsonLineLogger {
     else if (contexto && typeof contexto === 'object' && !Array.isArray(contexto)) extra = contexto;
     else extra = contexto === undefined ? {} : { detalhe: contexto };
     const fixos = msg instanceof Error ? { msg: msg.message, erro: msg } : { msg: comoTexto(msg) };
-    const completa = this.#serializar({ ...this.#chaves(extra), ts, nivel, ...fixos });
+    const base = { ts, nivel, ...fixos }; // fixos primeiro: o orçamento de nós nunca os atinge
+    for (const [k, v] of Object.entries(this.#chaves(extra))) if (!(k in base)) base[k] = v;
+    const completa = this.#serializar(base);
     if (Buffer.byteLength(completa) <= MAX_LINHA) return completa;
     return JSON.stringify({ ts, nivel, msg: cortar(comoTexto(fixos.msg), 1024), truncado: true });
   }
@@ -126,7 +129,9 @@ class JsonLineLogger {
   /** JSON seguro e limitado: circular, BigInt, Error, segredos mascarados, getters que lançam e tamanhos máximos. */
   #serializar(valor) {
     const pilha = new WeakSet();
+    let nos = 0;
     const limpar = (v, chave, nivel) => {
+      if ((nos += 1) > MAX_NOS) return '[limite]';
       if (chave && SEGREDOS.has(String(chave).toLowerCase())) return '***';
       if (typeof v === 'bigint') return v.toString();
       if (typeof v === 'string') return cortar(v, MAX_STRING);

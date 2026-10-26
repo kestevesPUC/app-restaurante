@@ -185,3 +185,19 @@ test('falha ao podar arquivo antigo não conta como falha de escrita e a linha �
   assert.equal(log.falhasDeEscrita(), 0);
   assert.equal(ler(dir, 'pdv-2026-10-26.log')[0].msg, 'segue');
 });
+
+test('contexto aninhado enorme respeita o orçamento de nós e continua sendo uma linha válida', () => {
+  const dir = pasta();
+  const logger = new JsonLineLogger({ pasta: dir });
+  let n = 'x'.repeat(4000); // referências compartilhadas: a árvore lógica é gigante, a memória do teste não
+  for (let i = 0; i < 4; i += 1) {
+    const filho = n;
+    n = Object.fromEntries(Array.from({ length: 100 }, (_, k) => [`k${k}`, Array.from({ length: 50 }, () => filho)]));
+  }
+  const inicio = Date.now();
+  logger.info('grande', { raiz: n });
+  assert.ok(Date.now() - inicio < 2000);
+  const [arquivo] = fs.readdirSync(dir);
+  const linhas = ler(dir, arquivo);
+  assert.equal(linhas[0].msg, 'grande');
+});
