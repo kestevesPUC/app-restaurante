@@ -5,6 +5,8 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { buildApplication } = require('./src/compositionRoot');
 const DailyBackup = require('./src/infrastructure/backup/DailyBackup');
+const { executarBackupSeguro } = require('./src/desktop/executarBackupSeguro');
+const { protegerNavegacao } = require('./src/desktop/protegerNavegacao');
 
 // PASTA DE DADOS FIXA — não altere. O banco (pdv.sqlite) fica aqui e o instalador NÃO a remove ao desinstalar,
 // então reinstalar ou atualizar mantém todos os dados. (--user-data-dir ou PDV_USER_DATA servem só para testes.)
@@ -41,7 +43,18 @@ function criarAtualizador() {
 
 function agendarManutencao(atualizador) {
   const backup = new DailyBackup({ db: application.db, pasta: path.join(app.getPath('documents'), 'PDV Restaurante Backups') });
-  const rodar = () => { try { backup.run(); } catch (error) { console.error('[backup]', error.message); } };
+  let avisou = false;
+  const rodar = () => executarBackupSeguro(backup, {
+    logger: console,
+    aoFalhar: (error) => {
+      if (avisou) return;
+      avisou = true; // um aviso por execução do app; não bloqueante
+      dialog.showMessageBox(win, {
+        type: 'warning', title: 'Backup não realizado', message: 'Não foi possível gravar o backup diário.',
+        detail: `${error.message}\n\nVerifique a pasta Documentos\\PDV Restaurante Backups (permissão, espaço, OneDrive).`,
+      }).catch(() => {});
+    },
+  });
   rodar();
   timers.push(setInterval(rodar, SEIS_HORAS));
   if (atualizador) {
@@ -73,16 +86,7 @@ async function iniciar() {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: !app.isPackaged },
   });
   win.on('page-title-updated', (event) => event.preventDefault());
-  win.webContents.setWindowOpenHandler(({ url: alvo }) => {
-    if (/^https?:\/\//i.test(alvo)) shell.openExternal(alvo);
-    return { action: 'deny' };
-  });
-  win.webContents.on('will-navigate', (event, alvo) => {
-    if (alvo !== url && !alvo.startsWith(`${url}/`)) {
-      event.preventDefault();
-      if (/^https?:\/\//i.test(alvo)) shell.openExternal(alvo);
-    }
-  });
+  protegerNavegacao(win.webContents, url, (alvo) => shell.openExternal(alvo));
   win.loadURL(url);
   agendarManutencao(atualizador);
 }

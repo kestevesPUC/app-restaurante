@@ -55,3 +55,27 @@ test('o backup abre como SQLite válido', () => {
     copia.close();
   } finally { limpar(); }
 });
+
+test('falha no meio do backup não deixa arquivo contando como backup de hoje; a execução seguinte cria', () => {
+  const { pasta, db, limpar } = ambiente();
+  try {
+    const relogio = () => dia(2026, 10, 23);
+    fs.writeFileSync(path.join(pasta, 'pdv-2026-10-23.sqlite.tmp'), 'lixo de queda antiga');
+    const quebrado = { backupTo(destino) { fs.writeFileSync(destino, 'parcial'); throw new Error('disco cheio'); } };
+    assert.throws(() => new DailyBackup({ db: quebrado, pasta, relogio }).run(), /disco cheio/);
+    assert.deepEqual(fs.readdirSync(pasta), []);
+    const arquivo = new DailyBackup({ db, pasta, relogio }).run();
+    assert.equal(arquivo, path.join(pasta, 'pdv-2026-10-23.sqlite'));
+    assert.deepEqual(fs.readdirSync(pasta), ['pdv-2026-10-23.sqlite']);
+  } finally { limpar(); }
+});
+
+test('tmp velho de queda é sobrescrito e não sobra após o backup', () => {
+  const { pasta, db, limpar } = ambiente();
+  try {
+    fs.writeFileSync(path.join(pasta, 'pdv-2026-10-23.sqlite.tmp'), 'lixo');
+    const arquivo = new DailyBackup({ db, pasta, relogio: () => dia(2026, 10, 23) }).run();
+    assert.ok(arquivo);
+    assert.deepEqual(fs.readdirSync(pasta), ['pdv-2026-10-23.sqlite']);
+  } finally { limpar(); }
+});

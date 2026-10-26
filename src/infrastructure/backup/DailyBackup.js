@@ -31,7 +31,16 @@ class DailyBackup {
     const nome = `pdv-${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}.sqlite`;
     const arquivo = path.join(this.pasta, nome);
     if (fs.existsSync(arquivo)) return null;
-    this.db.backupTo(arquivo);
+    // Escreve num temporário (nome não casa com PADRAO) e renomeia ao final: falha no meio nunca deixa "backup do dia".
+    const temporario = `${arquivo}.tmp`;
+    fs.rmSync(temporario, { force: true });
+    try {
+      this.db.backupTo(temporario);
+      fs.renameSync(temporario, arquivo);
+    } catch (error) {
+      fs.rmSync(temporario, { force: true });
+      throw error;
+    }
     this.#podar();
     return arquivo;
   }
