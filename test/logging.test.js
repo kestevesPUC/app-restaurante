@@ -112,3 +112,76 @@ test('fechar() resolve', async () => {
   const log = new JsonLineLogger({ pasta: pasta(), relogio: () => T0 });
   await log.fechar();
 });
+
+test('payload enorme: linha válida, limites aplicados e <= 64 KB', () => {
+  const dir = pasta();
+  const log = new JsonLineLogger({ pasta: dir, relogio: () => T0 });
+  let fundo = { fim: 1 };
+  for (let i = 0; i < 10; i += 1) fundo = { f: fundo };
+  const chaves = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`k${i}`, i]));
+  log.info('x'.repeat(10000), { grande: 'y'.repeat(100000), lista: Array.from({ length: 500 }, (_, i) => i), fundo, chaves });
+  const [l] = ler(dir, 'pdv-2026-10-26.log');
+  assert.ok(l.msg.endsWith('…[truncado]') && l.msg.length < 4200);
+  assert.ok(l.grande.endsWith('…[truncado]'));
+  assert.equal(l.lista.length, 51);
+  assert.equal(l.lista.at(-1), '…+450');
+  assert.ok(JSON.stringify(l.fundo).includes('[profundo]'));
+  assert.equal(Object.keys(l.chaves).length, 101);
+  const arquivo = fs.readFileSync(path.join(dir, 'pdv-2026-10-26.log'));
+  assert.ok(arquivo.length <= 64 * 1024 + 1);
+});
+
+test('linha acima de 64 KB é reduzida a { truncado: true } mantendo ts/nivel/msg', () => {
+  const dir = pasta();
+  const log = new JsonLineLogger({ pasta: dir, relogio: () => T0 });
+  const ctx = {};
+  for (let i = 0; i < 100; i += 1) ctx[`c${i}`] = Array.from({ length: 50 }, () => 'z'.repeat(4000));
+  log.warn('grande', ctx);
+  const [l] = ler(dir, 'pdv-2026-10-26.log');
+  assert.deepEqual(l, { ts: new Date(T0).toISOString(), nivel: 'warn', msg: 'grande', truncado: true });
+});
+
+test('getter que lança, Proxy que lança, msg e contexto exóticos: grava normalmente com 0 falhas', () => {
+  const dir = pasta();
+  const log = new JsonLineLogger({ pasta: dir, relogio: () => T0 });
+  const ruim = { ok: 1, get quebra() { throw new Error('boom'); } };
+  const proxy = new Proxy({}, { ownKeys() { throw new Error('ownKeys'); } });
+  log.info('a', ruim);
+  log.info('b', { aninhado: { get x() { throw new Error('x'); } }, proxy });
+  log.info('c', proxy);
+  log.info(42);
+  log.info({ a: 1 });
+  log.info(undefined);
+  log.info('d', undefined);
+  log.info('e', [1, 2]);
+  const ls = ler(dir, 'pdv-2026-10-26.log');
+  assert.equal(ls.length, 8);
+  assert.equal(ls[0].quebra, '[erro ao ler]');
+  assert.equal(ls[0].ok, 1);
+  assert.equal(ls[1].aninhado.x, '[erro ao ler]');
+  assert.equal(ls[1].proxy, '[erro ao ler]');
+  assert.equal(ls[3].msg, '42');
+  assert.equal(typeof ls[4].msg, 'string');
+  assert.equal(ls[5].msg, 'undefined');
+  assert.deepEqual(ls[7].detalhe, [1, 2]);
+  assert.equal(log.falhasDeEscrita(), 0);
+});
+
+test('chaves ts/nivel/msg do contexto não sobrescrevem os campos reais', () => {
+  const dir = pasta();
+  const log = new JsonLineLogger({ pasta: dir, relogio: () => T0 });
+  log.error('real', { ts: 'falso', nivel: 'debug', msg: 'falsa' });
+  const [l] = ler(dir, 'pdv-2026-10-26.log');
+  assert.equal(l.ts, new Date(T0).toISOString());
+  assert.equal(l.nivel, 'error');
+  assert.equal(l.msg, 'real');
+});
+
+test('falha ao podar arquivo antigo não conta como falha de escrita e a linha é gravada', () => {
+  const dir = pasta();
+  fs.mkdirSync(path.join(dir, 'pdv-2020-01-01.log')); // diretório com nome de log: unlinkSync falha
+  const log = new JsonLineLogger({ pasta: dir, relogio: () => T0, manter: 1 });
+  log.info('segue');
+  assert.equal(log.falhasDeEscrita(), 0);
+  assert.equal(ler(dir, 'pdv-2026-10-26.log')[0].msg, 'segue');
+});

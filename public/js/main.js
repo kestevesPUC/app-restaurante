@@ -3,6 +3,7 @@ import { esc } from './format.js';
 import { icon } from './icons.js';
 import { restoreTheme, themeButton, wireThemeButtons } from './theme.js';
 import { state } from './state.js';
+import { montarTitulo } from './titulo.js';
 import { notify, fail } from './ui.js';
 import { ROTAS, menuPara, nivelNome, podeAcessar, rotaInicial } from './niveis.js';
 import { conectar } from './events.js';
@@ -94,8 +95,9 @@ function mostrar() {
 
 /** Nome e versão do sistema (mesmo texto da janela do desktop): "PDV Restaurante — v0.1.0". */
 function carregarTitulo() {
+  if (state.tituloApp) return;
   api.get('/api/sistema').then(({ nome, versao }) => {
-    state.tituloApp = versao ? `${nome} — v${versao}` : nome;
+    state.tituloApp = montarTitulo(nome, versao);
     atualizarTitulo();
   }).catch(() => {});
 }
@@ -115,6 +117,7 @@ function entrarCom(me) {
 }
 
 function iniciar() {
+  carregarTitulo(); // repete se a 1ª tentativa falhou (ex.: senha provisória pendente)
   renderShell();
   eventos?.fechar();
   eventos = conectar((tipo, dados) => window.dispatchEvent(new CustomEvent('pdv:evento', { detail: { tipo, dados } })));
