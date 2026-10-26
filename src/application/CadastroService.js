@@ -2,7 +2,7 @@
 const NotFoundError = require('../domain/errors/NotFoundError');
 const ConflictError = require('../domain/errors/ConflictError');
 
-const ehViolacaoDeChave = (error) => /FOREIGN KEY/i.test(error?.message || '');
+const { ehViolacaoDeChave } = require('../infrastructure/database/violacoes');
 
 /** Casos de uso dos cadastros simples do cardápio (categorias, ingredientes). Toda alteração é auditada. */
 class CadastroService {

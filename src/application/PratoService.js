@@ -4,7 +4,7 @@ const ConflictError = require('../domain/errors/ConflictError');
 const ValidationError = require('../domain/errors/ValidationError');
 const { validarPrato } = require('../domain/cardapio/pratoValidator');
 
-const ehViolacaoDeChave = (error) => /FOREIGN KEY/i.test(error?.message || '');
+const { ehViolacaoDeChave } = require('../infrastructure/database/violacoes');
 
 /** Casos de uso de pratos (com a lista de ingredientes), foto e cardápio. Toda alteração é auditada. */
 class PratoService {

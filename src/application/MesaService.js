@@ -3,7 +3,7 @@ const NotFoundError = require('../domain/errors/NotFoundError');
 const ConflictError = require('../domain/errors/ConflictError');
 const { validarMesa } = require('../domain/mesaValidator');
 
-const ehViolacaoDeChave = (error) => /FOREIGN KEY/i.test(error?.message || '');
+const { ehViolacaoDeChave } = require('../infrastructure/database/violacoes');
 
 /** Casos de uso das mesas (RN-10): cadastro, ocupar e liberar. Toda alteração é auditada. */
 class MesaService {

@@ -115,7 +115,6 @@ test('exclui mesa livre; mesa referenciada por FK → 409 "Em uso"', async () =>
   const m = await nova('1');
   assert.equal((await app.request('DELETE', `/api/mesas/${m.id}`, { user: 'ADM' })).status, 200);
   const usada = await nova('2');
-  app.db.exec('PRAGMA foreign_keys = ON');
   app.db.prepare("INSERT INTO fila_espera (cliente_nome, telefone, pessoas, situacao, mesa_id, entrou_em) VALUES ('a', '+5511999998888', 2, 'CHAMADO', ?, '2026-10-23T12:00:00.000Z')").run(usada.id);
   const res = await app.request('DELETE', `/api/mesas/${usada.id}`, { user: 'ADM' });
   assert.equal(res.status, 409);
