@@ -8,6 +8,7 @@ const MODELO_MAX = 1000;
 const DEFAULTS = Object.freeze({
   'restaurante.nome': 'Restaurante Bom Sabor',
   'whatsapp.numero_empresa': '',
+  'whatsapp.navegador': '', // caminho do msedge.exe; vazio = detectar o Edge instalado
   'whatsapp.modelo_retirada': 'Olá, {nome}!\n\nSeu pedido nº {numero} está pronto para retirada.\n\nAgradecemos a preferência.',
   'whatsapp.modelo_entrega': 'Olá, {nome}!\n\nSeu pedido nº {numero} foi finalizado e está pronto para entrega.\n\nAgradecemos a preferência.',
   'fila.tolerancia_min': '10',

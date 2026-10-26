@@ -172,12 +172,12 @@ test('GET /api/eventos entrega o evento publicado no EventBus', async () => {
   sse.fechar();
 });
 
-test('nível C recebe apenas eventos de cozinha', async () => {
+test('nível C recebe apenas eventos de pedido (id e status)', async () => {
   const sse = await abrirEventos('COZ');
   await esperar(() => app.bus.size === 1);
-  app.bus.publish('pedido', { id: 1 });
-  app.bus.publish('cozinha', { envioId: 2, novo: true });
-  assert.deepEqual(await sse.lerEvento(), { tipo: 'cozinha', dados: { envioId: 2, novo: true } });
+  app.bus.publish('estoque', { bebidaId: 2 });
+  app.bus.publish('pedido', { id: 1, status: 'EM_PREPARO', extra: 'x' });
+  assert.deepEqual(await sse.lerEvento(), { tipo: 'pedido', dados: { id: 1, status: 'EM_PREPARO' } });
   sse.fechar();
 });
 

@@ -121,9 +121,9 @@ Autenticação por cabeçalho `Authorization: Bearer <token do terminal>` (gerad
 | GET/POST | `/api/pix/chaves` | listar / criar `{tipo, chave, nomeRecebedor, cidade}` |
 | POST | `/api/pix/chaves/:id/ativar` | ativa (desativa as outras) |
 | POST | `/api/pix/chaves/:id/teste` | gera QR Code de R$ 0,01 para conferência |
-| GET | `/api/whatsapp/estado` | estado + QR de pareamento (se aguardando) |
-| POST | `/api/whatsapp/conectar` · `/desconectar` | inicia / encerra a sessão |
-| POST | `/api/whatsapp/teste` | `{telefone}` envia mensagem de teste |
+| GET | `/api/whatsapp/estado` | `{estado, qr, numeroConectado, numeroEmpresa}` (+ `erro: 'Navegador não encontrado'` se o Edge não foi achado). `estado`: `DESCONECTADO`, `CONECTANDO`, `AGUARDANDO_QR`, `CONECTADO` |
+| POST | `/api/whatsapp/conectar` · `/desconectar` | inicia (se desconectado) / encerra a sessão; devolve o estado. `conectar` sem o Edge → `502` |
+| POST | `/api/whatsapp/teste` | `{telefone, texto?}` envia mensagem de teste; telefone inválido → `400`; falha do mensageiro → `502` com mensagem em português |
 | GET/PUT | `/api/maquininha` | provedor e configuração (segredos nunca voltam na resposta) |
 | POST | `/api/maquininha/teste` | cobrança de teste no modo simulado ou verificação de conexão do provedor |
 
@@ -145,10 +145,10 @@ Autenticação por cabeçalho `Authorization: Bearer <token do terminal>` (gerad
 | `pagamento` | `{id, pedidoId, situacao, mensagem}` |
 | `mesa` | `{id, situacao}` |
 | `fila` | `{id, situacao}` |
-| `whatsapp` | `{estado, qr?}` (QR só para nível A) |
+| `whatsapp` | `{estado, qr?, numero?}` (o `qr` só chega ao nível A) |
 | `cozinha` | `{envioId, pedidoId, cozinhaSituacao, novo: bool}` — o andon recarrega o cartão e toca o aviso quando `novo` |
 
-O nível C recebe apenas eventos `cozinha`.
+Por nível: A recebe tudo; B recebe tudo exceto o `qr` do evento `whatsapp`; C recebe somente `pedido` (`{id, status}`).
 
 ## Notificações de WhatsApp
 

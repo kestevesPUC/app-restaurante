@@ -34,6 +34,9 @@ const ClienteService = require('./application/ClienteService');
 const NotificacaoRepository = require('./infrastructure/repositories/NotificacaoRepository');
 const MensageiroSimulado = require('./infrastructure/whatsapp/MensageiroSimulado');
 const NotificacaoService = require('./application/NotificacaoService');
+const WhatsAppController = require('./presentation/http/controllers/WhatsAppController');
+const WhatsAppWebMensageiro = require('./infrastructure/whatsapp/WhatsAppWebMensageiro');
+const criarClienteWhatsApp = require('./infrastructure/whatsapp/criarClienteWhatsApp');
 const NotificacaoController = require('./presentation/http/controllers/NotificacaoController');
 const PedidoService = require('./application/PedidoService');
 const MontadorDeItens = require('./application/MontadorDeItens');
@@ -67,10 +70,11 @@ const HORA = 60 * 60 * 1000;
  * @param {number} [options.heartbeatMs] intervalo do batimento do canal SSE
  * @param {import('./application/ports/Mensageiro').Mensageiro} [options.mensageiro] padrão: MensageiroSimulado
  * @param {number} [options.notificacaoTimeoutMs] limite de cada envio de WhatsApp
+ * @param {{habilitado?: boolean, dataPath?: string, navegador?: string|null}} [options.whatsapp] `habilitado` troca o simulado pelo real
  */
 function buildApplication({
   dbPath = ':memory:', relogio = Date.now, publicDir = path.join(__dirname, '..', 'public'), logger = console, heartbeatMs,
-  mensageiro = new MensageiroSimulado(), notificacaoTimeoutMs,
+  mensageiro: mensageiroInjetado, notificacaoTimeoutMs, whatsapp = {},
 } = {}) {
   const clock = () => new Date(relogio());
   const db = new SqliteDatabase(dbPath);
@@ -93,6 +97,18 @@ function buildApplication({
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
   const throttle = new LoginThrottle({ now: relogio });
   const bus = new EventBus({ logger });
+  // WhatsApp real só quando habilitado (Electron); testes e `npm start` ficam com o mensageiro simulado.
+  const whatsappReal = Boolean(whatsapp.habilitado) && !mensageiroInjetado;
+  const mensageiro = mensageiroInjetado ?? (whatsappReal
+    ? new WhatsAppWebMensageiro({
+      criarCliente: () => {
+        if (!whatsapp.navegador) throw new Error('Navegador não encontrado');
+        return criarClienteWhatsApp({ dataPath: whatsapp.dataPath, navegador: whatsapp.navegador });
+      },
+      relogio, bus, logger,
+    })
+    : new MensageiroSimulado());
+  const erroWhatsApp = () => (whatsappReal && !whatsapp.navegador ? 'Navegador não encontrado' : null);
 
   const audit = new AuditTrail({ repository: repositories.auditoria, clock });
   const services = {
@@ -141,6 +157,7 @@ function buildApplication({
   new MesaController(services.mesas).register(router);
   new PedidoController(services.pedidos).register(router);
   new NotificacaoController(services.notificacoes, services.config).register(router);
+  new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp }).register(router);
   new ClienteController(services.clientes).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);

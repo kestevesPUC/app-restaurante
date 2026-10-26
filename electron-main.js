@@ -7,6 +7,7 @@ const { buildApplication } = require('./src/compositionRoot');
 const DailyBackup = require('./src/infrastructure/backup/DailyBackup');
 const { executarBackupSeguro } = require('./src/desktop/executarBackupSeguro');
 const { protegerNavegacao } = require('./src/desktop/protegerNavegacao');
+const { detectarNavegador } = require('./src/infrastructure/whatsapp/detectarNavegador');
 
 // PASTA DE DADOS FIXA — não altere. O banco (pdv.sqlite) fica aqui e o instalador NÃO a remove ao desinstalar,
 // então reinstalar ou atualizar mantém todos os dados. (--user-data-dir ou PDV_USER_DATA servem só para testes.)
@@ -66,7 +67,10 @@ function agendarManutencao(atualizador) {
 async function iniciar() {
   const dbPath = path.join(app.getPath('userData'), 'pdv.sqlite');
   const atualizador = criarAtualizador();
-  application = buildApplication({ dbPath });
+  // Sessão do WhatsApp em userData: fora do banco e do backup. O Edge instalado é o navegador (nada é baixado).
+  const whatsapp = { habilitado: true, dataPath: path.join(app.getPath('userData'), 'whatsapp-session'), navegador: null };
+  application = buildApplication({ dbPath, whatsapp });
+  whatsapp.navegador = detectarNavegador({ configurado: application.services.config.get('whatsapp.navegador') });
   const inicial = application.services.adminBootstrap.run();
   const { port } = await application.server.listen(0, '127.0.0.1');
   const url = `http://127.0.0.1:${port}`;
@@ -89,6 +93,8 @@ async function iniciar() {
   protegerNavegacao(win.webContents, url, (alvo) => shell.openExternal(alvo));
   win.loadURL(url);
   agendarManutencao(atualizador);
+  // Só depois da janela abrir; sem o Edge o estado fica DESCONECTADO e GET /api/whatsapp/estado informa o motivo.
+  if (whatsapp.navegador) application.mensageiro.iniciar().catch((error) => console.error('[whatsapp]', error.message));
 }
 
 app.on('second-instance', () => {
@@ -111,6 +117,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   encerrando = true;
   timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
-  application.close().catch((error) => console.error('[encerrar]', error.message)).finally(() => app.quit());
+  Promise.resolve(application.mensageiro.parar?.()).catch((error) => console.error('[whatsapp]', error.message))
+    .then(() => application.close()).catch((error) => console.error('[encerrar]', error.message)).finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());
