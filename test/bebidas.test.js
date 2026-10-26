@@ -96,7 +96,7 @@ test('excluir bebida com movimentos além do inicial → 409 "Em uso" sugerindo 
 test('excluir bebida usada em pedido (FK) → 409 "Em uso"', async () => {
   const b = await nova({ estoqueQtd: 5 });
   const adm = app.db.prepare("SELECT id FROM usuarios WHERE usuario = 'ADM'").get().id;
-  const pedido = app.db.prepare("INSERT INTO pedidos (data_local, numero_dia, tipo, cliente_nome, criado_por, criado_em) VALUES ('2026-10-23', 1, 'BALCAO', 'Ana', ?, '2026-10-23T12:00:00.000Z')").run(adm);
+  const pedido = app.db.prepare("INSERT INTO pedidos (data_local, tipo, cliente_nome, criado_por, criado_em) VALUES ('2026-10-23', 'BALCAO', 'Ana', ?, '2026-10-23T12:00:00.000Z')").run(adm);
   app.db.prepare("INSERT INTO movimentacoes_estoque (bebida_id, tipo, quantidade, saldo_apos, pedido_id, em) VALUES (?, 'VENDA', -1, 4, ?, '2026-10-23T12:00:00.000Z')").run(b.id, Number(pedido.lastInsertRowid));
   const res = await apagar(`/api/bebidas/${b.id}`);
   assert.equal(res.status, 409);

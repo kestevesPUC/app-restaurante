@@ -32,6 +32,7 @@ const EstoqueService = require('./application/EstoqueService');
 const ClienteService = require('./application/ClienteService');
 const PedidoService = require('./application/PedidoService');
 const MontadorDeItens = require('./application/MontadorDeItens');
+const ConsultaDePedidos = require('./application/ConsultaDePedidos');
 const FotoValidator = require('./domain/validation/FotoValidator');
 const { validarCategoria, validarIngrediente } = require('./domain/cardapio/validators');
 
@@ -97,17 +98,18 @@ function buildApplication({
       repository: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, fotoValidator: new FotoValidator(), audit,
       pratoJaPedido: (id) => repositories.pedidos.pratoJaPedido(id),
     }),
-    mesas: new MesaService({
-      repository: repositories.mesas, audit, bus, comandaNaoPagaDaMesa: (id) => repositories.pedidos.comandaNaoPagaDaMesa(id) !== null,
-    }),
+    mesas: new MesaService({ repository: repositories.mesas, audit, bus }),
     adminBootstrap: new AdminBootstrap({ usuarios: repositories.usuarios, hasher, audit, clock }),
   };
   services.bebidas = new BebidaService({ db, repository: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.estoque = new EstoqueService({ db, bebidas: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.clientes = new ClienteService({ repository: repositories.clientes, audit, clock });
   services.pedidos = new PedidoService({
-    db, repository: repositories.pedidos, mesaRepository: repositories.mesas, mesas: services.mesas, config: services.config, audit, bus, relogio,
-    montador: new MontadorDeItens({ pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes }),
+    db, repository: repositories.pedidos, estoque: services.estoque, clientes: services.clientes, config: services.config, audit, bus, relogio, logger,
+    consulta: new ConsultaDePedidos({ repository: repositories.pedidos, config: services.config, relogio }),
+    montador: new MontadorDeItens({
+      pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, bebidas: repositories.bebidas,
+    }),
   });
 
   const router = new Router();

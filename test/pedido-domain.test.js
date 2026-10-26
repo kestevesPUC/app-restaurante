@@ -3,7 +3,6 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const ValidationError = require('../src/domain/errors/ValidationError');
 const { calcularItem, calcularPedido } = require('../src/domain/pedido/calculos');
-const { SITUACOES, podeTransitar } = require('../src/domain/pedido/situacoes');
 const { validarItem, validarItemBebida, validarIdentificacao } = require('../src/domain/pedido/ItemValidator');
 
 const invalido = (fn) => assert.throws(fn, ValidationError);
@@ -58,32 +57,6 @@ test('calcularPedido rejeita desconto e itens inválidos', () => {
   invalido(() => calcularPedido([{ totalCents: -1 }]));
   invalido(() => calcularPedido('x'));
   invalido(() => calcularPedido([{ totalCents: Number.MAX_SAFE_INTEGER }, { totalCents: 10 }]));
-});
-
-// ---- situações ----
-test('SITUACOES lista as quatro situações', () => {
-  assert.deepEqual(SITUACOES, ['ABERTO', 'AGUARDANDO_PAGAMENTO', 'PAGO', 'CANCELADO']);
-});
-
-test('ABERTO→AGUARDANDO_PAGAMENTO ok, PAGO→ABERTO não, PAGO→CANCELADO ok, CANCELADO→qualquer não', () => {
-  assert.equal(podeTransitar('ABERTO', 'AGUARDANDO_PAGAMENTO'), true);
-  assert.equal(podeTransitar('PAGO', 'ABERTO'), false);
-  assert.equal(podeTransitar('PAGO', 'CANCELADO'), true);
-  for (const s of SITUACOES) assert.equal(podeTransitar('CANCELADO', s), false);
-});
-
-test('matriz completa de transições; mesma situação e desconhecidas são falsas', () => {
-  const ok = new Set(['ABERTO>AGUARDANDO_PAGAMENTO', 'ABERTO>CANCELADO', 'AGUARDANDO_PAGAMENTO>ABERTO',
-    'AGUARDANDO_PAGAMENTO>PAGO', 'AGUARDANDO_PAGAMENTO>CANCELADO', 'PAGO>CANCELADO']);
-  for (const de of SITUACOES) {
-    for (const para of SITUACOES) {
-      assert.equal(podeTransitar(de, para), ok.has(`${de}>${para}`), `${de}→${para}`);
-    }
-  }
-  assert.equal(podeTransitar('XYZ', 'ABERTO'), false);
-  assert.equal(podeTransitar('ABERTO', 'XYZ'), false);
-  assert.equal(podeTransitar(undefined, null), false);
-  assert.equal(podeTransitar('toString', 'ABERTO'), false);
 });
 
 // ---- validarItem ----

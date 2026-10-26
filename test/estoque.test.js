@@ -3,8 +3,8 @@ const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
 
-let app; let pedidoSeq;
-beforeEach(async () => { app = await createTestApp(); pedidoSeq = 0; });
+let app;
+beforeEach(async () => { app = await createTestApp(); });
 afterEach(async () => { await app.close(); });
 
 const post = (rota, body, user = 'ADM') => app.request('POST', rota, { user, body });
@@ -15,8 +15,7 @@ const saldo = (id) => app.db.prepare('SELECT estoque_qtd FROM bebidas WHERE id =
 const movimentos = (id) => app.db.prepare('SELECT * FROM movimentacoes_estoque WHERE bebida_id = ? ORDER BY id').all(id);
 const novoPedido = () => {
   const adm = app.db.prepare("SELECT id FROM usuarios WHERE usuario = 'ADM'").get().id;
-  pedidoSeq += 1;
-  return Number(app.db.prepare("INSERT INTO pedidos (data_local, numero_dia, tipo, cliente_nome, criado_por, criado_em) VALUES ('2026-10-23', ?, 'BALCAO', 'Ana', ?, '2026-10-23T12:00:00.000Z')").run(pedidoSeq, adm).lastInsertRowid);
+  return Number(app.db.prepare("INSERT INTO pedidos (data_local, tipo, cliente_nome, criado_por, criado_em) VALUES ('2026-10-23', 'BALCAO', 'Ana', ?, '2026-10-23T12:00:00.000Z')").run(adm).lastInsertRowid);
 };
 const ADM = { id: 1, usuario: 'ADM' };
 const estoque = () => app.app.services.estoque;

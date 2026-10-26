@@ -12,17 +12,15 @@ class MesaService {
    * @param {import('../infrastructure/repositories/MesaRepository')} deps.repository
    * @param {import('./AuditTrail')} deps.audit
    * @param {import('../infrastructure/events/EventBus')} [deps.bus] recebe o evento `mesa` a cada mudança de situação
-   * @param {(mesaId:number) => boolean} [deps.comandaNaoPagaDaMesa] porta ligada ao repositório de pedidos (Tarefa 11)
    */
-  constructor({ repository, audit, bus = null, comandaNaoPagaDaMesa = () => false }) {
+  constructor({ repository, audit, bus = null }) {
     this.repository = repository;
     this.audit = audit;
     this.bus = bus;
-    this.comandaNaoPagaDaMesa = comandaNaoPagaDaMesa;
   }
 
   list() {
-    return this.repository.findAllComPedidoAberto();
+    return this.repository.findAll();
   }
 
   create(user, body) {
@@ -65,10 +63,9 @@ class MesaService {
     return this.#mudarSituacao(user, antes, 'OCUPADA', 'ocupar', 'ocupada', eventos);
   }
 
-  /** → LIVRE, desde que não haja comanda em aberto. `sugestaoFila` é preenchida na Parte 2. */
+  /** → LIVRE (a trava de comanda aberta volta com a fase de mesas). `sugestaoFila` é preenchida na Parte 2. */
   liberar(user, id, { eventos = null } = {}) {
     const antes = this.#exigir(id);
-    if (this.comandaNaoPagaDaMesa(antes.id)) throw new ConflictError('Mesa com conta em aberto');
     const mesa = this.#mudarSituacao(user, antes, 'LIVRE', 'liberar', 'liberada', eventos);
     return { mesa, sugestaoFila: null };
   }

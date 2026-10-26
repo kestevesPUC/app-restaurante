@@ -1,7 +1,7 @@
 'use strict';
 const ValidationError = require('../../domain/errors/ValidationError');
 
-const SITUACOES_PEDIDO = ['ABERTO', 'AGUARDANDO_PAGAMENTO', 'PAGO', 'CANCELADO'];
+const { STATUS } = require('../../domain/pedido/status');
 
 /** Inteiro positivo vindo de rota ou query (texto); nunca devolve NaN. */
 function idPositivo(valor, rotulo = 'O identificador') {
@@ -22,17 +22,19 @@ function dataIso(valor, rotulo) {
   return texto;
 }
 
-/** Filtros de listagem de pedidos (query string); o filtro `forma` é aceito e ignorado por enquanto. */
+/** Filtros de listagem de pedidos (query string): de, ate, status, q, limite (1–1000). */
 function filtrosDePedidos(query = {}) {
   const filtros = {};
   if (query.de !== undefined) filtros.de = dataIso(query.de, 'A data inicial');
   if (query.ate !== undefined) filtros.ate = dataIso(query.ate, 'A data final');
-  if (query.situacao !== undefined && query.situacao !== '') {
-    if (!SITUACOES_PEDIDO.includes(query.situacao)) throw new ValidationError('Situação inválida');
-    filtros.situacao = query.situacao;
+  if (query.status !== undefined && query.status !== '') {
+    if (!STATUS.includes(query.status)) throw new ValidationError('Status inválido');
+    filtros.status = query.status;
   }
-  if (query.mesaId !== undefined && query.mesaId !== '') filtros.mesaId = idPositivo(query.mesaId, 'A mesa');
-  if (query.atendenteId !== undefined && query.atendenteId !== '') filtros.atendenteId = idPositivo(query.atendenteId, 'O atendente');
+  if (query.limite !== undefined && query.limite !== '') {
+    filtros.limite = idPositivo(query.limite, 'O limite');
+    if (filtros.limite > 1000) throw new ValidationError('O limite deve ser um inteiro entre 1 e 1000');
+  }
   if (typeof query.q === 'string' && query.q.trim()) filtros.q = query.q;
   return filtros;
 }

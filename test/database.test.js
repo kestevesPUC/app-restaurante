@@ -76,7 +76,7 @@ test('movimentacoes_estoque.tipo e notificacoes_whatsapp.situacao/tipo rejeitam 
   assert.throws(() => mov('OUTRO'), /CHECK constraint failed/);
 
   novoUsuario(db, 'adm');
-  db.prepare("INSERT INTO pedidos (id, data_local, numero_dia, tipo, cliente_nome, criado_por, criado_em) VALUES (1, '2026-10-26', 1, 'BALCAO', 'Ana', 1, ?)").run(AGORA);
+  db.prepare("INSERT INTO pedidos (id, data_local, tipo, cliente_nome, criado_por, criado_em) VALUES (1, '2026-10-26', 'BALCAO', 'Ana', 1, ?)").run(AGORA);
   const notif = (tipo, situacao) => db.prepare('INSERT INTO notificacoes_whatsapp (pedido_id, tipo, telefone, texto, situacao, em) VALUES (1, ?, ?, ?, ?, ?)').run(tipo, '+5511999998888', 'oi', situacao, AGORA);
   notif('RETIRADA', 'ENVIADA');
   notif('ENTREGA', 'FALHOU');
@@ -89,7 +89,7 @@ test('movimentacoes_estoque.tipo e notificacoes_whatsapp.situacao/tipo rejeitam 
 test('pedido_status_historico exige pedido existente e permite UPDATE/DELETE (sem gatilhos)', () => {
   const db = new SqliteDatabase(':memory:');
   novoUsuario(db, 'adm');
-  db.prepare("INSERT INTO pedidos (id, data_local, numero_dia, tipo, cliente_nome, criado_por, criado_em) VALUES (1, '2026-10-26', 1, 'BALCAO', 'Ana', 1, ?)").run(AGORA);
+  db.prepare("INSERT INTO pedidos (id, data_local, tipo, cliente_nome, criado_por, criado_em) VALUES (1, '2026-10-26', 'BALCAO', 'Ana', 1, ?)").run(AGORA);
   const hist = (pedido) => db.prepare("INSERT INTO pedido_status_historico (pedido_id, status_anterior, status_novo, usuario_id, usuario, em) VALUES (?, 'ABERTO', 'RECEBIDO', 1, 'adm', ?)").run(pedido, AGORA);
   hist(1);
   assert.throws(() => hist(99), /FOREIGN KEY constraint failed/);

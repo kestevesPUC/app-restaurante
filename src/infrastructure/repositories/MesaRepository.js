@@ -18,15 +18,6 @@ class MesaRepository {
     return this.db.prepare(`SELECT ${COLUNAS} FROM mesas ORDER BY length(numero_norm), numero_norm, id`).all().map((r) => this.#toEntity(r));
   }
 
-  /** Mesas com `pedidoAberto`: a comanda ABERTO/AGUARDANDO_PAGAMENTO (ou null). */
-  findAllComPedidoAberto() {
-    const comandas = new Map(this.db.prepare(`SELECT id, mesa_id, numero_dia, situacao, total_cents, criado_em FROM pedidos
-      WHERE tipo = 'MESA' AND situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO')`).all().map((r) => [r.mesa_id, {
-      id: r.id, numeroDia: r.numero_dia, situacao: r.situacao, totalCents: r.total_cents, criadoEm: r.criado_em,
-    }]));
-    return this.findAll().map((m) => ({ ...m, pedidoAberto: comandas.get(m.id) ?? null }));
-  }
-
   findById(id) {
     return this.#toEntity(this.db.prepare(`SELECT ${COLUNAS} FROM mesas WHERE id = ?`).get(Number(id)));
   }

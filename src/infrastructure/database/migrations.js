@@ -144,29 +144,29 @@ module.exports = [
         CREATE TABLE pedidos (
           id INTEGER PRIMARY KEY,
           data_local TEXT NOT NULL,
-          numero_dia INTEGER NOT NULL CHECK (numero_dia >= 1),
-          tipo TEXT NOT NULL CHECK (tipo IN ('BALCAO','MESA')),
+          tipo TEXT NOT NULL DEFAULT 'BALCAO' CHECK (tipo IN ('BALCAO','MESA')),
           mesa_id INTEGER REFERENCES mesas(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'ABERTO'
+            CHECK (status IN ('ABERTO','RECEBIDO','EM_PREPARO','PRONTO_RETIRADA','PRONTO_ENTREGA','FINALIZADO','CANCELADO')),
+          cliente_id INTEGER REFERENCES clientes(id) ON DELETE RESTRICT,
           cliente_nome TEXT,
-          situacao TEXT NOT NULL DEFAULT 'ABERTO' CHECK (situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO','PAGO','CANCELADO')),
+          cliente_telefone TEXT,
+          tempo_estimado_min INTEGER NOT NULL DEFAULT 0 CHECK (tempo_estimado_min >= 0),
+          confirmado_em TEXT,
           subtotal_cents INTEGER NOT NULL DEFAULT 0,
           desconto_cents INTEGER NOT NULL DEFAULT 0,
           total_cents INTEGER NOT NULL DEFAULT 0,
           observacao TEXT,
           criado_por INTEGER NOT NULL REFERENCES usuarios(id),
           criado_em TEXT NOT NULL,
-          finalizado_em TEXT,
-          pago_em TEXT,
           cancelado_em TEXT,
           cancelado_por INTEGER REFERENCES usuarios(id),
           motivo_cancelamento TEXT,
-          UNIQUE (data_local, numero_dia),
-          CHECK ((tipo = 'MESA' AND mesa_id IS NOT NULL) OR (tipo = 'BALCAO' AND cliente_nome IS NOT NULL)),
           CHECK (total_cents = subtotal_cents - desconto_cents AND desconto_cents BETWEEN 0 AND subtotal_cents)
         );
-        CREATE UNIQUE INDEX ux_comanda_aberta ON pedidos(mesa_id) WHERE tipo = 'MESA' AND situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO');
         CREATE INDEX ix_pedidos_data ON pedidos(data_local, id);
-        CREATE INDEX ix_pedidos_situacao ON pedidos(situacao);
+        CREATE INDEX ix_pedidos_status ON pedidos(status);
+        CREATE INDEX ix_pedidos_cliente ON pedidos(cliente_id);
 
         CREATE TABLE pedido_envios (
           id INTEGER PRIMARY KEY,
@@ -188,8 +188,11 @@ module.exports = [
           id INTEGER PRIMARY KEY,
           pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
           envio_id INTEGER REFERENCES pedido_envios(id) ON DELETE RESTRICT,
-          prato_id INTEGER NOT NULL REFERENCES pratos(id) ON DELETE RESTRICT,
-          prato_nome TEXT NOT NULL,
+          item_tipo TEXT NOT NULL CHECK (item_tipo IN ('PRATO','BEBIDA')),
+          prato_id INTEGER REFERENCES pratos(id) ON DELETE RESTRICT,
+          bebida_id INTEGER REFERENCES bebidas(id) ON DELETE RESTRICT,
+          item_nome TEXT NOT NULL,
+          tempo_preparo_min INTEGER NOT NULL DEFAULT 0 CHECK (tempo_preparo_min >= 0),
           preco_unit_cents INTEGER NOT NULL CHECK (preco_unit_cents >= 0),
           adicionais_cents INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cents >= 0),
           quantidade INTEGER NOT NULL CHECK (quantidade >= 1),
@@ -198,10 +201,13 @@ module.exports = [
           ordem INTEGER NOT NULL DEFAULT 0,
           cancelado_em TEXT,
           cancelado_por INTEGER REFERENCES usuarios(id),
-          motivo_cancelamento TEXT
+          motivo_cancelamento TEXT,
+          CHECK ((item_tipo = 'PRATO' AND prato_id IS NOT NULL AND bebida_id IS NULL)
+              OR (item_tipo = 'BEBIDA' AND bebida_id IS NOT NULL AND prato_id IS NULL))
         );
         CREATE INDEX ix_itens_pedido ON pedido_itens(pedido_id);
         CREATE INDEX ix_itens_prato ON pedido_itens(prato_id);
+        CREATE INDEX ix_itens_bebida ON pedido_itens(bebida_id);
         CREATE INDEX ix_itens_envio ON pedido_itens(envio_id);
 
         CREATE TABLE item_modificacoes (
