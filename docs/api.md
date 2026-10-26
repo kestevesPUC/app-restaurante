@@ -82,6 +82,13 @@ Preços, totais e nomes enviados no corpo são ignorados; o servidor usa o card�
 
 O nível **C (Cozinha)** só acessa estas rotas, `/api/eventos` e as rotas de acesso (`/api/me`, `/api/logout`).
 
+## Clientes
+
+| Método | Rota | Acesso | Descrição |
+| --- | --- | --- | --- |
+| GET | `/api/clientes?q=&limite=` | A, B | busca por nome (sem acento/maiúsculas) ou dígitos do telefone (número nacional, sem o `+55`); sem `q`, os mais recentes. `limite` 1–200, `q` até 80 caracteres. Cada cliente traz `qtdPedidos` e `totalGastoCents` (só pedidos `FINALIZADO`) |
+| GET | `/api/clientes/:id` | A, B | `{ cliente, qtdPedidos, totalGastoCents, ultimaCompra, ultimosPedidos }`; totais e `ultimaCompra` (ISO UTC, `null` sem compras) só de `FINALIZADO`; `ultimosPedidos` = até 10 confirmados (inclusive `CANCELADO`, sem rascunhos), mais recentes primeiro, com `id`, `status`, `totalCents`, `confirmadoEm`, `quantidadeTotal` |
+
 ## Terminal (Moderninha Smart) 🌐
 
 Autenticação por cabeçalho `Authorization: Bearer <token do terminal>` (gerado no pareamento), não por cookie.

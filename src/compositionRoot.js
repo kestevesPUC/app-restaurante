@@ -29,6 +29,7 @@ const PratoService = require('./application/PratoService');
 const MesaService = require('./application/MesaService');
 const BebidaService = require('./application/BebidaService');
 const EstoqueService = require('./application/EstoqueService');
+const ClienteController = require('./presentation/http/controllers/ClienteController');
 const ClienteService = require('./application/ClienteService');
 const PedidoService = require('./application/PedidoService');
 const MontadorDeItens = require('./application/MontadorDeItens');
@@ -121,6 +122,7 @@ function buildApplication({
   new CardapioController(services.pratos).register(router);
   new MesaController(services.mesas).register(router);
   new PedidoController(services.pedidos).register(router);
+  new ClienteController(services.clientes).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
   new AuditController(repositories.auditoria).register(router);

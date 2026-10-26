@@ -8,7 +8,7 @@ beforeEach(async () => { app = await createTestApp(); });
 afterEach(async () => { await app.close(); });
 
 const clientes = () => app.app.services.clientes;
-const ADM = { id: 1, usuario: 'ADM' };
+const ADM = { id: 1, usuario: 'ADM', nivel: 'A' };
 const total = () => app.db.prepare('SELECT COUNT(*) AS n FROM clientes').get().n;
 const auditorias = (acao) => app.db.prepare('SELECT * FROM auditoria WHERE entidade = ? AND acao = ?').all('cliente', acao);
 const falhaCom = (status) => (e) => e.status === status;
@@ -57,21 +57,21 @@ test('telefone inválido → 400 e nada gravado', () => {
 test('buscar por parte do nome (sem acento/maiúsculas), por dígitos e por %', () => {
   clientes().registrar(ADM, { nome: 'José Antônio', telefone: '11999998888' });
   clientes().registrar(ADM, { nome: 'Maria', telefone: '21988887777' });
-  assert.deepEqual(clientes().buscar({ q: 'JOSE ant' }).map((c) => c.nome), ['José Antônio']);
-  assert.deepEqual(clientes().buscar({ q: '99999' }).map((c) => c.nome), ['José Antônio']);
-  assert.deepEqual(clientes().buscar({ q: '(21) 9888' }).map((c) => c.nome), ['Maria']);
-  assert.deepEqual(clientes().buscar({ q: '%' }), []);
-  assert.deepEqual(clientes().buscar({ q: '_' }), []);
+  assert.deepEqual(clientes().buscar(ADM, { q: 'JOSE ant' }).map((c) => c.nome), ['José Antônio']);
+  assert.deepEqual(clientes().buscar(ADM, { q: '99999' }).map((c) => c.nome), ['José Antônio']);
+  assert.deepEqual(clientes().buscar(ADM, { q: '(21) 9888' }).map((c) => c.nome), ['Maria']);
+  assert.deepEqual(clientes().buscar(ADM, { q: '%' }), []);
+  assert.deepEqual(clientes().buscar(ADM, { q: '_' }), []);
 });
 
 test('buscar sem q devolve os mais recentes primeiro, respeitando o limite', () => {
   clientes().registrar(ADM, { nome: 'A', telefone: '11999990001' });
   app.relogio.advance(1000);
   clientes().registrar(ADM, { nome: 'B', telefone: '11999990002' });
-  assert.deepEqual(clientes().buscar({}).map((c) => c.nome), ['B', 'A']);
-  assert.deepEqual(clientes().buscar({ q: '', limite: 1 }).map((c) => c.nome), ['B']);
+  assert.deepEqual(clientes().buscar(ADM, {}).map((c) => c.nome), ['B', 'A']);
+  assert.deepEqual(clientes().buscar(ADM, { q: '', limite: 1 }).map((c) => c.nome), ['B']);
 });
 
 test('limite inválido → 400', () => {
-  for (const limite of [0, 201, 1.5, '10', -1, null]) assert.throws(() => clientes().buscar({ limite }), falhaCom(400), String(limite));
+  for (const limite of [0, 201, 1.5, '10', -1, null]) assert.throws(() => clientes().buscar(ADM, { limite }), falhaCom(400), String(limite));
 });
