@@ -22,7 +22,7 @@ class MesaService {
   }
 
   list() {
-    return this.repository.findAll();
+    return this.repository.findAllComPedidoAberto();
   }
 
   create(user, body) {

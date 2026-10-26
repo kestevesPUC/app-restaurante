@@ -124,6 +124,19 @@ class PedidoRepository {
     return this.#envio(this.db.prepare('SELECT * FROM pedido_envios WHERE id = ?').get(envioId));
   }
 
+  /** Resumo da cozinha por pedido: `{ rodadas, entregues, situacao }` (situação da rodada mais atrasada). */
+  resumosCozinha(pedidoIds) {
+    const resumos = new Map();
+    if (!pedidoIds.length) return resumos;
+    const marcas = pedidoIds.map(() => '?').join(',');
+    const ordem = ['NA_FILA', 'EM_PREPARO', 'PRONTO', 'ENTREGUE'];
+    const linhas = this.db.prepare(`SELECT pedido_id, COUNT(*) AS rodadas, SUM(cozinha_situacao = 'ENTREGUE') AS entregues,
+      MIN(CASE cozinha_situacao WHEN 'NA_FILA' THEN 0 WHEN 'EM_PREPARO' THEN 1 WHEN 'PRONTO' THEN 2 ELSE 3 END) AS pior
+      FROM pedido_envios WHERE vai_para_cozinha = 1 AND pedido_id IN (${marcas}) GROUP BY pedido_id`).all(...pedidoIds);
+    for (const r of linhas) resumos.set(r.pedido_id, { rodadas: r.rodadas, entregues: r.entregues, situacao: ordem[r.pior] });
+    return resumos;
+  }
+
   /** Comanda de mesa ainda não paga (ABERTO ou AGUARDANDO_PAGAMENTO), ou null. */
   comandaNaoPagaDaMesa(mesaId) {
     const row = this.db.prepare(`SELECT id FROM pedidos WHERE mesa_id = ? AND tipo = 'MESA'

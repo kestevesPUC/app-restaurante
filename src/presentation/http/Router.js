@@ -1,4 +1,5 @@
 'use strict';
+const ValidationError = require('../../domain/errors/ValidationError');
 
 /**
  * Tabela de rotas. Opções por rota (RN-01):
@@ -15,7 +16,7 @@ class Router {
 
   add(method, pattern, handler, options = {}) {
     const keys = [];
-    const source = pattern.replace(/:(\w+)/g, (_, key) => (keys.push(key), '([^/]+)'));
+    const source = pattern.replace(/\./g, '\\.').replace(/:(\w+)/g, (_, key) => (keys.push(key), '([^/]+)'));
     this.routes.push({ method, regex: new RegExp(`^${source}$`), keys, handler, options });
     return this;
   }
@@ -26,10 +27,19 @@ class Router {
       if (route.method !== method) continue;
       const found = route.regex.exec(pathname);
       if (!found) continue;
-      const params = Object.fromEntries(route.keys.map((key, i) => [key, decodeURIComponent(found[i + 1])]));
+      const params = Object.fromEntries(route.keys.map((key, i) => [key, this.#decodificar(found[i + 1])]));
       return { handler: route.handler, options: route.options, params };
     }
     return null;
+  }
+
+  /** %-encoding malformado vira 400 (nunca 500). */
+  #decodificar(valor) {
+    try {
+      return decodeURIComponent(valor);
+    } catch {
+      throw new ValidationError('Endereço inválido');
+    }
   }
 }
 

@@ -8,6 +8,7 @@ const { calcularPedido, centavos } = require('../domain/pedido/calculos');
 const { podeTransitar } = require('../domain/pedido/situacoes');
 
 const MOTIVO_MAX = 200;
+const LIMITE_LISTA = 1000;
 const NIVEIS_PEDIDO = ['A', 'B'];
 const NAO_PAGOS = ['ABERTO', 'AGUARDANDO_PAGAMENTO'];
 
@@ -208,6 +209,23 @@ class PedidoService {
     const hoje = dataLocalDe(this.relogio());
     return this.repository.listar({ de: de || hoje, ate: ate || de || hoje, situacao, mesaId, atendenteId, q })
       .map((p) => ({ ...p, pagamentos: [] }));
+  }
+
+  /** Linhas da grade de pedidos (máx. 1000), com o resumo das rodadas da cozinha. */
+  listarResumo(filtros = {}) {
+    const pedidos = this.listar(filtros).slice(0, LIMITE_LISTA);
+    const cozinha = this.repository.resumosCozinha(pedidos.map((p) => p.id));
+    return pedidos.map((p) => ({
+      id: p.id, numeroDia: p.numeroDia, criadoEm: p.criadoEm, tipo: p.tipo, mesa: p.mesaNumero, clienteNome: p.clienteNome,
+      qtdItens: p.qtdItens, totalCents: p.totalCents, situacao: p.situacao, forma: p.forma, cozinha: cozinha.get(p.id) ?? null, atendente: p.atendente,
+    }));
+  }
+
+  /** Comanda ainda não paga da mesa; 404 se não houver. */
+  comandaDaMesa(mesaId) {
+    const id = this.repository.comandaNaoPagaDaMesa(mesaId);
+    if (id === null) throw new NotFoundError('A mesa não tem comanda aberta');
+    return this.obter(id);
   }
 
   obter(id) {

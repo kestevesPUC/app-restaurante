@@ -35,6 +35,7 @@ const StaticFileHandler = require('./presentation/http/StaticFileHandler');
 const CadastroController = require('./presentation/http/controllers/CadastroController');
 const PratoController = require('./presentation/http/controllers/PratoController');
 const MesaController = require('./presentation/http/controllers/MesaController');
+const PedidoController = require('./presentation/http/controllers/PedidoController');
 const CardapioController = require('./presentation/http/controllers/CardapioController');
 const AuthController =require('./presentation/http/controllers/AuthController');
 const UsuarioController = require('./presentation/http/controllers/UsuarioController');
@@ -103,6 +104,7 @@ function buildApplication({
   new PratoController(services.pratos).register(router);
   new CardapioController(services.pratos).register(router);
   new MesaController(services.mesas).register(router);
+  new PedidoController(services.pedidos).register(router);
   new AuditController(repositories.auditoria).register(router);
   new EventController(bus, { heartbeatMs }).register(router);
 
