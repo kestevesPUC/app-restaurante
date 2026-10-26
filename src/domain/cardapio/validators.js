@@ -54,4 +54,4 @@ function validarIngrediente(body, atual = INGREDIENTE_PADRAO) {
   };
 }
 
-module.exports = { normalizarNome, validarCategoria, validarIngrediente, NOME_MAX };
+module.exports = { normalizarNome, validarNome, booleano, mesclar, validarCategoria, validarIngrediente, NOME_MAX };

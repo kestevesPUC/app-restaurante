@@ -30,7 +30,7 @@ test('precoAdicionalCents negativo → 400', async () => {
 test('excluir ingrediente em uso → 409 "Em uso"', async () => {
   const ing = (await criarIngrediente('Alface')).body;
   const cat = (await app.request('POST', '/api/categorias', { user: 'ADM', body: { nome: 'Saladas' } })).body;
-  app.db.prepare('INSERT INTO pratos (id, categoria_id, nome, preco_cents) VALUES (1, ?, ?, 1000)').run(cat.id, 'Salada');
+  app.db.prepare('INSERT INTO pratos (id, categoria_id, nome, nome_norm, preco_cents) VALUES (1, ?, ?, ?, 1000)').run(cat.id, 'Salada', 'salada');
   app.db.prepare('INSERT INTO prato_ingredientes (prato_id, ingrediente_id) VALUES (1, ?)').run(ing.id);
   const res = await app.request('DELETE', `/api/ingredientes/${ing.id}`, { user: 'ADM' });
   assert.equal(res.status, 409);

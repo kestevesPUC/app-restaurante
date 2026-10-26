@@ -69,11 +69,13 @@ module.exports = [
         CREATE TABLE pratos (
           id INTEGER PRIMARY KEY,
           categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE RESTRICT,
-          nome TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          nome TEXT NOT NULL,
+          nome_norm TEXT NOT NULL UNIQUE,
           codigo TEXT UNIQUE,
           descricao TEXT,
           preco_cents INTEGER NOT NULL CHECK (preco_cents > 0),
           foto BLOB,
+          foto_tipo TEXT,
           ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1))
         );
         CREATE INDEX ix_pratos_categoria ON pratos(categoria_id);
