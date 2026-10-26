@@ -102,19 +102,19 @@ class WhatsAppWebMensageiro {
       this._numero = cliente.info?.wid?.user ?? null;
       this.#mudar('CONECTADO');
     }));
-    cliente.on('auth_failure', ativo((mensagem) => { this.#falhar(cliente, new Error(`Falha de autenticação do WhatsApp: ${mensagem}`)).catch(() => {}); }));
+    cliente.on('auth_failure', ativo((mensagem) => { this.#falhar(cliente, new Error(`Falha de autenticação do WhatsApp: ${mensagem}`), { reconectar: false }).catch(() => {}); }));
     cliente.on('disconnected', ativo((motivo) => { this.#falhar(cliente, new Error(`WhatsApp desconectado: ${motivo}`)).catch(() => {}); }));
   }
 
   /** Registra a falha, descarta o cliente e agenda nova tentativa (a menos que `parar()` tenha sido chamado). */
-  async #falhar(cliente, error) {
+  async #falhar(cliente, error, { reconectar = true } = {}) {
     this.logger?.error?.(error);
     if (cliente && this._cliente !== cliente) return;
     const descartado = this.#soltarCliente();
     this._qr = null;
     this._numero = null;
     this.#mudar('DESCONECTADO');
-    if (!this._parado) {
+    if (!this._parado && reconectar) {
       const espera = ESPERAS_MS[Math.min(this._tentativa, ESPERAS_MS.length - 1)];
       this._tentativa += 1;
       this._timer = this.agendar(() => {

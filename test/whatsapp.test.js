@@ -141,12 +141,15 @@ test('disconnected → DESCONECTADO e nova tentativa em 5, 10, 20, 40, 60, 60 s;
   assert.equal(agendados.at(-1).ms, 5000);
 });
 
-test('auth_failure → DESCONECTADO com log', async () => {
-  const { m, cliente, logs } = montar();
+test('auth_failure → DESCONECTADO com log e SEM reconexão automática', async () => {
+  const { m, cliente, logs, agendados } = montar();
   await m.iniciar();
   cliente().emitir('auth_failure', 'sessão inválida');
   assert.equal(m.estado(), 'DESCONECTADO');
   assert.equal(logs.length, 1);
+  assert.equal(agendados.length, 0);
+  await m.iniciar(); // só o operador reconecta
+  assert.equal(m.estado(), 'CONECTANDO');
 });
 
 test('falha em initialize → DESCONECTADO + backoff, sem unhandledRejection', async () => {
@@ -190,4 +193,51 @@ test('detectarNavegador escolhe o Edge (x86 primeiro), respeita o configurado e 
   assert.equal(detectarNavegador({ existe: () => false, env: {} }), null);
   assert.equal(detectarNavegador({ configurado: 'D:\\x\\edge.exe', existe: (p) => p === 'D:\\x\\edge.exe', env }), 'D:\\x\\edge.exe');
   assert.equal(detectarNavegador({ configurado: 'D:\\nao\\existe.exe', existe: (p) => p === x64, env }), x64);
+});
+
+test('cliente antigo que emite ready/qr depois da reconexão não altera o estado', async () => {
+  const { m, clientes, agendados } = montar();
+  await m.iniciar();
+  const antigo = clientes[0];
+  antigo.emitir('disconnected', 'X');
+  await agendados.at(-1).fn();
+  assert.equal(clientes.length, 2);
+  antigo.emitir('ready');
+  antigo.emitir('qr', 'QR-VELHO');
+  assert.equal(m.estado(), 'CONECTANDO');
+  assert.equal(m.qrAtual(), null);
+  assert.equal(m.numeroConectado(), null);
+});
+
+test('parar com initialize pendente e rejeição tardia: sem unhandledRejection e sem mudar o estado', async () => {
+  let falhar;
+  const base = criarClienteFalso();
+  base.initialize = () => new Promise((_, rej) => { falhar = rej; });
+  const m2 = new WhatsAppWebMensageiro({ criarCliente: () => base, logger: { error: () => {} }, agendar: () => ({}), cancelar: () => {} });
+  const iniciando = m2.iniciar();
+  await m2.parar();
+  falhar(new Error('tarde'));
+  await iniciando;
+  assert.equal(m2.estado(), 'DESCONECTADO');
+  assert.equal(base.destruidos, 1);
+});
+
+test('destroy rejeitando dentro de parar é logado e não propaga', async () => {
+  const { m, cliente, logs } = montar();
+  await m.iniciar();
+  cliente().destroy = async () => { throw new Error('destroy travou'); };
+  await m.parar();
+  assert.equal(m.estado(), 'DESCONECTADO');
+  assert.equal(logs.length, 1);
+});
+
+test('função agendada que dispara depois de parar não cria cliente novo', async () => {
+  const { m, clientes, agendados } = montar();
+  await m.iniciar();
+  clientes[0].emitir('disconnected', 'X');
+  const t = agendados.at(-1);
+  await m.parar();
+  await t.fn();
+  assert.equal(clientes.length, 1);
+  assert.equal(m.estado(), 'DESCONECTADO');
 });

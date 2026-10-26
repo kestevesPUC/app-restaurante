@@ -7,6 +7,7 @@ const { buildApplication } = require('./src/compositionRoot');
 const DailyBackup = require('./src/infrastructure/backup/DailyBackup');
 const { executarBackupSeguro } = require('./src/desktop/executarBackupSeguro');
 const { protegerNavegacao } = require('./src/desktop/protegerNavegacao');
+const { comLimite } = require('./src/desktop/comLimite');
 const { detectarNavegador } = require('./src/infrastructure/whatsapp/detectarNavegador');
 
 // PASTA DE DADOS FIXA — não altere. O banco (pdv.sqlite) fica aqui e o instalador NÃO a remove ao desinstalar,
@@ -19,6 +20,7 @@ const instanciaUnica = app.requestSingleInstanceLock();
 if (!instanciaUnica) app.quit();
 
 const SEIS_HORAS = 6 * 60 * 60 * 1000;
+const LIMITE_PARAR_WHATSAPP_MS = 5000;
 let win;
 let application;
 let encerrando = false;
@@ -117,7 +119,7 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   encerrando = true;
   timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
-  Promise.resolve(application.mensageiro.parar?.()).catch((error) => console.error('[whatsapp]', error.message))
+  comLimite(Promise.resolve().then(() => application.mensageiro.parar?.()), LIMITE_PARAR_WHATSAPP_MS, { rotulo: 'whatsapp', logger: console })
     .then(() => application.close()).catch((error) => console.error('[encerrar]', error.message)).finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());

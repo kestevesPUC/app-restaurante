@@ -91,3 +91,17 @@ test('SSE: C recebe só pedido; B recebe whatsapp sem qr; A recebe o qr', async 
   assert.deepEqual((await a.ler(1)), [{ tipo: 'whatsapp', dados: { estado: 'AGUARDANDO_QR', qr: 'QR-1' } }]);
   c.fechar(); b.fechar(); a.fechar();
 });
+
+test('POST conectar responde na hora com CONECTANDO mesmo se initialize nunca resolve; repetir é no-op', async () => {
+  await app.close();
+  const WhatsAppWebMensageiro = require('../src/infrastructure/whatsapp/WhatsAppWebMensageiro');
+  let criados = 0;
+  const cliente = { on() {}, initialize: () => new Promise(() => {}), destroy: async () => {} };
+  const m = new WhatsAppWebMensageiro({ criarCliente: () => { criados += 1; return cliente; }, logger: { error: () => {} } });
+  app = await createTestApp({ mensageiro: m });
+  const r = await app.request('POST', '/api/whatsapp/conectar', { user: 'ADM' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.estado, 'CONECTANDO');
+  assert.equal((await app.request('POST', '/api/whatsapp/conectar', { user: 'ADM' })).body.estado, 'CONECTANDO');
+  assert.equal(criados, 1);
+});

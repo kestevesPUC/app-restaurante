@@ -13,7 +13,8 @@ class WhatsAppController {
    * @param {import('../../../application/ConfigService')} config
    * @param {{erro?: () => string|null}} [opcoes] `erro` informa por que a conexão real não pode ser feita
    */
-  constructor(mensageiro, config, { erro = () => null } = {}) {
+  constructor(mensageiro, config, { erro = () => null, logger = console } = {}) {
+    this.logger = logger;
     this.mensageiro = mensageiro;
     this.config = config;
     this.erro = erro;
@@ -31,10 +32,11 @@ class WhatsAppController {
   register(router) {
     const A = { nivel: 'A' };
     router.add('GET', '/api/whatsapp/estado', () => this.#estado(), A);
-    router.add('POST', '/api/whatsapp/conectar', async () => {
+    router.add('POST', '/api/whatsapp/conectar', () => {
       const erro = this.erro();
       if (erro) throw new ExternalServiceError(erro);
-      if (this.mensageiro.estado() === 'DESCONECTADO') await this.mensageiro.iniciar?.();
+      // não aguarda: a conexão pode levar minutos; o progresso chega por SSE
+      if (this.mensageiro.estado() === 'DESCONECTADO') Promise.resolve(this.mensageiro.iniciar?.()).catch((e) => this.logger?.error?.(e));
       return this.#estado();
     }, A);
     router.add('POST', '/api/whatsapp/desconectar', async () => {

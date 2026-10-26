@@ -157,7 +157,7 @@ function buildApplication({
   new MesaController(services.mesas).register(router);
   new PedidoController(services.pedidos).register(router);
   new NotificacaoController(services.notificacoes, services.config).register(router);
-  new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp }).register(router);
+  new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp, logger }).register(router);
   new ClienteController(services.clientes).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
