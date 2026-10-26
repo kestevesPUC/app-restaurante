@@ -1,0 +1,77 @@
+'use strict';
+const UnauthorizedError = require('../domain/errors/UnauthorizedError');
+const TooManyAttemptsError = require('../domain/errors/TooManyAttemptsError');
+const ValidationError = require('../domain/errors/ValidationError');
+const { usuarioPublico } = require('../domain/usuarioPublico');
+const AuditTrail = require('./AuditTrail');
+
+const SENHA_MINIMA = 6;
+
+/** Autenticação (RN-01): login com bloqueio por tentativas, sessões e troca de senha. Tudo é auditado. */
+class AuthService {
+  /**
+   * @param {object} deps
+   * @param {import('../infrastructure/repositories/UsuarioRepository')} deps.usuarios
+   * @param {import('../infrastructure/security/PasswordHasher')} deps.hasher
+   * @param {import('../infrastructure/security/SessionStore')} deps.sessions
+   * @param {import('../infrastructure/security/LoginThrottle')} deps.throttle
+   * @param {AuditTrail} deps.audit
+   */
+  constructor({ usuarios, hasher, sessions, throttle, audit }) {
+    this.usuarios = usuarios;
+    this.hasher = hasher;
+    this.sessions = sessions;
+    this.throttle = throttle;
+    this.audit = audit;
+  }
+
+  /** @returns {{sid: string, user: object}} */
+  login(usuarioInformado, senha) {
+    const login = String(usuarioInformado || '').trim().toUpperCase();
+    if (this.throttle.isBlocked(login)) {
+      this.#registrarTentativa(login, 'login_bloqueado', `Login bloqueado por excesso de tentativas (${login})`);
+      throw new TooManyAttemptsError();
+    }
+    const user = this.usuarios.findByUsuario(login);
+    if (!user || !user.ativo || !this.hasher.verify(String(senha || ''), user.senhaHash)) {
+      this.throttle.registerFailure(login);
+      this.#registrarTentativa(login, 'login_falha', `Tentativa de login com senha incorreta (${login})`);
+      throw new UnauthorizedError('Usuário ou senha incorretos');
+    }
+    this.throttle.reset(login);
+    this.audit.record({ actor: user, acao: 'login', entidade: 'sessao', entidadeId: user.id, descricao: `${user.usuario} entrou no sistema` });
+    return { sid: this.sessions.create(user.id, user.nivel), user: usuarioPublico(user) };
+  }
+
+  logout(sid) {
+    const user = this.resolveUser(sid);
+    this.sessions.destroy(sid);
+    if (user) this.audit.record({ actor: user, acao: 'logout', entidade: 'sessao', entidadeId: user.id, descricao: `${user.usuario} saiu do sistema` });
+  }
+
+  /** @returns {object|null} usuário (público) dono da sessão válida e ativa */
+  resolveUser(sid) {
+    const userId = this.sessions.userIdFor(sid);
+    if (!userId) return null;
+    const user = this.usuarios.findById(userId);
+    if (!user || !user.ativo) {
+      this.sessions.destroy(sid);
+      return null;
+    }
+    return usuarioPublico(user);
+  }
+
+  trocarSenha(user, atual, nova) {
+    const entidade = this.usuarios.findById(user.id);
+    if (!entidade || !this.hasher.verify(String(atual || ''), entidade.senhaHash)) throw new ValidationError('Senha atual incorreta');
+    if (String(nova || '').length < SENHA_MINIMA) throw new ValidationError(`A senha deve ter ao menos ${SENHA_MINIMA} caracteres`);
+    this.usuarios.updatePassword(entidade.id, this.hasher.hash(nova), false);
+    this.audit.record({ actor: user, acao: 'senha', entidade: 'usuario', entidadeId: entidade.id, descricao: `${entidade.usuario} trocou a própria senha` });
+  }
+
+  #registrarTentativa(login, acao, descricao) {
+    this.audit.record({ actor: AuditTrail.anonymous(login), acao, entidade: 'sessao', descricao });
+  }
+}
+
+module.exports = AuthService;
