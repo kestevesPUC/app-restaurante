@@ -135,7 +135,7 @@ dl.niveis dt{font-weight:600}dl.niveis dd{margin:0;color:var(--mute)}
 .badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;margin-left:2px;border-radius:999px;background:var(--brand);color:var(--brand-ink);font-size:12px;font-weight:700}
 .badge[hidden]{display:none}
 .grid-info{margin:0 0 10px;color:var(--mute);font-size:13px}
-th .th-sort{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center;min-height:24px}
+th .th-sort{all:unset;cursor:pointer;display:inline-flex;gap:4px;align-items:center;min-height:40px}
 th .th-sort:hover{color:var(--ink)}th .th-sort:focus-visible{outline:3px solid var(--brand);border-radius:4px}
 details.row-menu{position:relative;display:inline-block}
 details.row-menu>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center}

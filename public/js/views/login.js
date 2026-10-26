@@ -40,7 +40,7 @@ export function renderTrocaSenha(root, onDone) {
     if (nova !== repetir) return notify('As senhas novas não conferem.', 'err');
     try {
       await api.post('/api/me/senha', { atual, nova });
-      return onDone();
+      return await onDone();
     } catch (e) { return fail(e); }
   };
 }
