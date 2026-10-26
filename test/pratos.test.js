@@ -3,15 +3,19 @@ const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
 
-let app;
-beforeEach(async () => { app = await createTestApp(); });
+let app; let baseId;
+beforeEach(async () => { app = await createTestApp(); baseId = undefined; });
 afterEach(async () => { await app.close(); });
 
 const post = (rota, body, user = 'ADM') => app.request('POST', rota, { user, body });
 const put = (rota, body, user = 'ADM') => app.request('PUT', rota, { user, body });
 const novaCategoria = async (nome = 'Lanches', extra = {}) => (await post('/api/categorias', { nome, ...extra })).body;
-const novoIngrediente = async (nome, extra = {}) => (await post('/api/ingredientes', { nome, ...extra })).body;
-const prato = (categoriaId, extra = {}) => post('/api/pratos', { nome: 'X-Burger', categoriaId, precoCents: 2500, ingredientes: [], ...extra });
+const novoIngrediente = async (nome, extra = {}) => (await post('/api/ingredientes', { nome, unidadeMedida: 'UN', ...extra })).body;
+// Todo prato exige pelo menos um ingrediente: sem lista explícita, usa um ingrediente-base criado sob demanda.
+const prato = async (categoriaId, extra = {}) => {
+  if (!extra.ingredientes && !baseId) baseId = (await novoIngrediente('Base')).id;
+  return post('/api/pratos', { nome: 'X-Burger', categoriaId, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: baseId }], ...extra });
+};
 const item = (ingredienteId, ordem = 0, extra = {}) => ({ ingredienteId, removivel: true, ordem, ...extra });
 
 // PNG mínimo (só a assinatura importa) e variações para os testes de foto.
@@ -82,6 +86,7 @@ test('GET /api/cardapio omite pratos e categorias inativos e traz adicionais', a
   assert.equal(p.categoriaId, ativa.id);
   assert.equal(p.precoCents, 2500);
   assert.equal(p.codigo, '1');
+  assert.equal(p.tempoPreparoMin, 10);
   assert.equal(p.temFoto, false);
   assert.deepEqual(p.ingredientes, [{ ingredienteId: queijo.id, nome: 'Queijo', removivel: true, quantidade: '2 fatias', ordem: 0 }]);
   assert.deepEqual(res.body.adicionais.map((a) => [a.nome, a.precoAdicionalCents]), [['Queijo', 400]]);
@@ -145,7 +150,7 @@ test('excluir: porta pratoJaPedido → 409 "Em uso"; livre → ok', async () => 
 
 test('permissões e auditoria', async () => {
   const cat = await novaCategoria();
-  assert.equal((await post('/api/pratos', { nome: 'Z', categoriaId: cat.id, precoCents: 100 }, 'ATEND')).status, 403);
+  assert.equal((await post('/api/pratos', { nome: 'Z', categoriaId: cat.id, precoCents: 100, tempoPreparoMin: 5 }, 'ATEND')).status, 403);
   assert.equal((await app.request('GET', '/api/pratos', { user: 'ATEND' })).status, 200);
   assert.equal((await app.request('GET', '/api/pratos', { user: 'COZ' })).status, 403);
   const p = (await prato(cat.id)).body;
@@ -168,4 +173,44 @@ test('excluir prato com ingredientes apaga prato_ingredientes em cascata e prese
   assert.equal(contar(), 0);
   const restantes = (await app.request('GET', '/api/ingredientes', { user: 'ADM' })).body.map((i) => i.id);
   assert.deepEqual(restantes.sort(), [a.id, b.id].sort());
+});
+
+test('prato sem tempo de preparo ou com 0, -1 ou 1.5 → 400', async () => {
+  const cat = await novaCategoria();
+  const ing = await novoIngrediente('Pão');
+  const criar = (extra) => post('/api/pratos', { nome: 'T', categoriaId: cat.id, precoCents: 1000, ingredientes: [item(ing.id)], ...extra });
+  assert.equal((await criar({})).status, 400);
+  for (const v of [0, -1, 1.5, '10']) assert.equal((await criar({ tempoPreparoMin: v })).status, 400, String(v));
+  const ok = await criar({ tempoPreparoMin: 1 });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.tempoPreparoMin, 1);
+});
+
+test('prato sem ingredientes → 400 "O prato precisa de pelo menos um ingrediente" (criar e atualizar)', async () => {
+  const cat = await novaCategoria();
+  const ing = await novoIngrediente('Pão');
+  const base = { nome: 'S', categoriaId: cat.id, precoCents: 1000, tempoPreparoMin: 5 };
+  for (const ingredientes of [undefined, []]) {
+    const res = await post('/api/pratos', { ...base, ingredientes });
+    assert.equal(res.status, 400);
+    assert.match(JSON.stringify(res.body), /O prato precisa de pelo menos um ingrediente/);
+  }
+  const criado = (await post('/api/pratos', { ...base, ingredientes: [item(ing.id)] })).body;
+  const res = await put(`/api/pratos/${criado.id}`, { ingredientes: [] });
+  assert.equal(res.status, 400);
+  assert.match(JSON.stringify(res.body), /O prato precisa de pelo menos um ingrediente/);
+  const lido = (await app.request('GET', '/api/pratos', { user: 'ADM' })).body.find((x) => x.id === criado.id);
+  assert.equal(lido.ingredientes.length, 1);
+});
+
+test('ativar/inativar prato por PUT {ativo} mantém a lista de ingredientes e o tempo', async () => {
+  const cat = await novaCategoria();
+  const criado = (await prato(cat.id)).body;
+  const off = await put(`/api/pratos/${criado.id}`, { ativo: false });
+  assert.equal(off.status, 200);
+  assert.equal(off.body.ativo, false);
+  assert.equal(off.body.ingredientes.length, 1);
+  assert.equal(off.body.tempoPreparoMin, 10);
+  const on = await put(`/api/pratos/${criado.id}`, { ativo: true });
+  assert.equal(on.body.ingredientes.length, 1);
 });

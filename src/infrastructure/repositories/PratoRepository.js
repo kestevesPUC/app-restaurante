@@ -1,7 +1,7 @@
 'use strict';
 const { normalizarNome } = require('../../domain/cardapio/validators');
 
-const COLUNAS = 'id, nome, codigo, categoria_id, descricao, preco_cents, ativo, foto IS NOT NULL AS tem_foto';
+const COLUNAS = 'id, nome, codigo, categoria_id, descricao, preco_cents, tempo_preparo_min, ativo, foto IS NOT NULL AS tem_foto';
 
 /** Pratos e a lista de ingredientes de cada um (`prato_ingredientes`). Gravação sempre em transação. */
 class PratoRepository {
@@ -18,6 +18,7 @@ class PratoRepository {
       categoriaId: row.categoria_id,
       descricao: row.descricao,
       precoCents: row.preco_cents,
+      tempoPreparoMin: row.tempo_preparo_min,
       ativo: !!row.ativo,
       temFoto: !!row.tem_foto,
       ingredientes,
@@ -63,8 +64,8 @@ class PratoRepository {
   create(dados) {
     return this.db.transaction(() => {
       const { lastInsertRowid } = this.db.prepare(
-        'INSERT INTO pratos (nome, nome_norm, codigo, categoria_id, descricao, preco_cents, ativo) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).run(dados.nome, normalizarNome(dados.nome), dados.codigo, dados.categoriaId, dados.descricao, dados.precoCents, dados.ativo ? 1 : 0);
+        'INSERT INTO pratos (nome, nome_norm, codigo, categoria_id, descricao, preco_cents, tempo_preparo_min, ativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ).run(dados.nome, normalizarNome(dados.nome), dados.codigo, dados.categoriaId, dados.descricao, dados.precoCents, dados.tempoPreparoMin, dados.ativo ? 1 : 0);
       this.#gravarIngredientes(Number(lastInsertRowid), dados.ingredientes || []);
       return this.findById(Number(lastInsertRowid));
     });
@@ -74,8 +75,8 @@ class PratoRepository {
   update(id, dados) {
     return this.db.transaction(() => {
       this.db.prepare(
-        'UPDATE pratos SET nome = ?, nome_norm = ?, codigo = ?, categoria_id = ?, descricao = ?, preco_cents = ?, ativo = ? WHERE id = ?',
-      ).run(dados.nome, normalizarNome(dados.nome), dados.codigo, dados.categoriaId, dados.descricao, dados.precoCents, dados.ativo ? 1 : 0, Number(id));
+        'UPDATE pratos SET nome = ?, nome_norm = ?, codigo = ?, categoria_id = ?, descricao = ?, preco_cents = ?, tempo_preparo_min = ?, ativo = ? WHERE id = ?',
+      ).run(dados.nome, normalizarNome(dados.nome), dados.codigo, dados.categoriaId, dados.descricao, dados.precoCents, dados.tempoPreparoMin, dados.ativo ? 1 : 0, Number(id));
       if (dados.ingredientes) this.#gravarIngredientes(Number(id), dados.ingredientes);
       return this.findById(id);
     });

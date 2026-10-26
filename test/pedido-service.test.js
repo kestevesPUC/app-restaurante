@@ -22,12 +22,12 @@ const status = (fn) => { try { fn(); return 200; } catch (e) { if (!e.status) th
 function cardapio() {
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
   const bebidas = s.categorias.create(A, { nome: 'Bebidas', vaiParaCozinha: false });
-  const cebola = s.ingredientes.create(A, { nome: 'Cebola' });
-  const bacon = s.ingredientes.create(A, { nome: 'Bacon', podeSerAdicional: true, precoAdicionalCents: 400 });
+  const cebola = s.ingredientes.create(A, { nome: 'Cebola', unidadeMedida: 'UN' });
+  const bacon = s.ingredientes.create(A, { nome: 'Bacon', unidadeMedida: 'FATIA', podeSerAdicional: true, precoAdicionalCents: 400 });
   const burger = s.pratos.create(A, {
-    nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, ingredientes: [{ ingredienteId: cebola.id, removivel: true, ordem: 0 }],
+    nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: cebola.id, removivel: true, ordem: 0 }],
   });
-  const suco = s.pratos.create(A, { nome: 'Suco', categoriaId: bebidas.id, precoCents: 800, ingredientes: [] });
+  const suco = s.pratos.create(A, { nome: 'Suco', categoriaId: bebidas.id, precoCents: 800, tempoPreparoMin: 2, ingredientes: [{ ingredienteId: cebola.id }] });
   return { lanches, bebidas, cebola, bacon, burger, suco };
 }
 const it = (prato, extra = {}) => ({ pratoId: prato.id, quantidade: 1, remover: [], adicionar: [], ...extra });

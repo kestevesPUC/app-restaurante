@@ -2,12 +2,13 @@
 const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
+const { UNIDADES } = require('../src/domain/cardapio/validators');
 
 let app;
 beforeEach(async () => { app = await createTestApp(); });
 afterEach(async () => { await app.close(); });
 
-const criarIngrediente = (nome, extra = {}) => app.request('POST', '/api/ingredientes', { user: 'ADM', body: { nome, precoAdicionalCents: 0, podeSerAdicional: false, ...extra } });
+const criarIngrediente = (nome, extra = {}) => app.request('POST', '/api/ingredientes', { user: 'ADM', body: { nome, unidadeMedida: 'UN', precoAdicionalCents: 0, podeSerAdicional: false, ...extra } });
 
 test('rejeita ingrediente "Pao" quando existe "Pão"', async () => {
   assert.equal((await criarIngrediente('Pão')).status, 200);
@@ -30,7 +31,7 @@ test('precoAdicionalCents negativo → 400', async () => {
 test('excluir ingrediente em uso → 409 "Em uso"', async () => {
   const ing = (await criarIngrediente('Alface')).body;
   const cat = (await app.request('POST', '/api/categorias', { user: 'ADM', body: { nome: 'Saladas' } })).body;
-  app.db.prepare('INSERT INTO pratos (id, categoria_id, nome, nome_norm, preco_cents) VALUES (1, ?, ?, ?, 1000)').run(cat.id, 'Salada', 'salada');
+  app.db.prepare('INSERT INTO pratos (id, categoria_id, nome, nome_norm, preco_cents, tempo_preparo_min) VALUES (1, ?, ?, ?, 1000, 5)').run(cat.id, 'Salada', 'salada');
   app.db.prepare('INSERT INTO prato_ingredientes (prato_id, ingrediente_id) VALUES (1, ?)').run(ing.id);
   const res = await app.request('DELETE', `/api/ingredientes/${ing.id}`, { user: 'ADM' });
   assert.equal(res.status, 409);
@@ -84,4 +85,23 @@ test('criação, alteração e exclusão geram auditoria', async () => {
   await app.request('DELETE', `/api/ingredientes/${ing.id}`, { user: 'ADM' });
   const linhas = app.db.prepare("SELECT acao FROM auditoria WHERE entidade = 'ingrediente' ORDER BY id").all();
   assert.deepEqual(linhas.map((l) => l.acao), ['criar', 'alterar', 'excluir']);
+});
+
+test('unidade de medida inválida ou ausente → 400; minúscula é normalizada', async () => {
+  assert.equal((await criarIngrediente('A', { unidadeMedida: 'XX' })).status, 400);
+  assert.equal((await criarIngrediente('B', { unidadeMedida: undefined })).status, 400);
+  assert.equal((await criarIngrediente('C', { unidadeMedida: null })).status, 400);
+  const ok = await criarIngrediente('D', { unidadeMedida: 'porcao' });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.unidadeMedida, 'PORCAO');
+  for (const u of UNIDADES) assert.equal((await criarIngrediente(`U-${u}`, { unidadeMedida: u })).status, 200, u);
+});
+
+test('observação do ingrediente: opcional, até 200 caracteres', async () => {
+  assert.equal((await criarIngrediente('Obs 201', { observacao: 'x'.repeat(201) })).status, 400);
+  const ok = await criarIngrediente('Obs 200', { observacao: 'x'.repeat(200) });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.observacao.length, 200);
+  const sem = await criarIngrediente('Sem obs');
+  assert.equal(sem.body.observacao, null);
 });
