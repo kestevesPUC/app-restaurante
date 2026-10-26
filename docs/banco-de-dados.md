@@ -51,14 +51,16 @@ erDiagram
     }
     CATEGORIAS {
         int id PK
-        text nome UK
+        text nome
+        text nome_norm UK
         int ordem
         int vai_para_cozinha
         int ativo
     }
     INGREDIENTES {
         int id PK
-        text nome UK
+        text nome
+        text nome_norm UK
         int preco_adicional_cents
         int pode_ser_adicional
         int ativo
@@ -66,11 +68,13 @@ erDiagram
     PRATOS {
         int id PK
         int categoria_id FK
-        text nome UK
+        text nome
+        text nome_norm UK
         text codigo UK
         text descricao
         int preco_cents
         blob foto
+        text foto_tipo
         int ativo
     }
     PRATO_INGREDIENTES {
@@ -227,11 +231,12 @@ erDiagram
 | `ativo` | INTEGER | usuário inativo não faz login |
 
 ### `categorias`, `ingredientes`, `pratos`, `prato_ingredientes`
+- `nome_norm` (nome em minúsculas e sem acento) é `UNIQUE` em `categorias`, `ingredientes` e `pratos`; `nome` guarda o texto original.
 - `ingredientes.preco_adicional_cents >= 0`; `pratos.preco_cents > 0`.
 - `prato_ingredientes`: chave primária composta `(prato_id, ingrediente_id)`; `ON DELETE CASCADE` a partir de `pratos`;
   `ON DELETE RESTRICT` a partir de `ingredientes`.
 - `pratos.categoria_id` com `ON DELETE RESTRICT`.
-- `pratos.foto`: imagem WebP/JPEG até 300 KB (opcional).
+- `pratos.foto`: imagem PNG/JPEG/WebP até 300 KB (opcional); `pratos.foto_tipo` guarda o tipo MIME.
 
 ### `mesas`
 `situacao CHECK IN ('LIVRE','OCUPADA','RESERVADA')`.

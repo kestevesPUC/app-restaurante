@@ -156,3 +156,16 @@ test('permissões e auditoria', async () => {
   assert.deepEqual(linhas.map((l) => l.acao), ['criar', 'alterar', 'alterar', 'excluir']);
   assert.equal(linhas.some((l) => (l.depois || '').includes('base64')), false);
 });
+
+test('excluir prato com ingredientes apaga prato_ingredientes em cascata e preserva os ingredientes', async () => {
+  const cat = await novaCategoria();
+  const a = await novoIngrediente('A');
+  const b = await novoIngrediente('B');
+  const p = (await prato(cat.id, { ingredientes: [item(a.id), item(b.id, 1)] })).body;
+  const contar = () => app.db.prepare('SELECT COUNT(*) AS n FROM prato_ingredientes WHERE prato_id = ?').get(p.id).n;
+  assert.equal(contar(), 2);
+  assert.equal((await app.request('DELETE', `/api/pratos/${p.id}`, { user: 'ADM' })).status, 200);
+  assert.equal(contar(), 0);
+  const restantes = (await app.request('GET', '/api/ingredientes', { user: 'ADM' })).body.map((i) => i.id);
+  assert.deepEqual(restantes.sort(), [a.id, b.id].sort());
+});
