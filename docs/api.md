@@ -6,7 +6,7 @@ Autenticação por cookie de sessão `sid` (`HttpOnly; SameSite=Strict`). Erros:
 adequado (400 validação, 401 não autenticado, 403 sem permissão, 404, 409 conflito de situação, 429 muitas tentativas, 502 serviço externo, 500).
 Valores monetários em **centavos** (inteiros); datas `AAAA-MM-DD`; data/hora ISO 8601.
 
-**Acesso:** `todos` = Administrador e Atendente (o nível C, Cozinha, só acessa as rotas indicadas em [Cozinha](#cozinha-andon)); `A` = somente Administrador. Enquanto a senha provisória não for trocada, só `/api/me` e `/api/me/senha` respondem.
+**Acesso:** `todos` = Administrador e Atendente (o nível C, Cozinha, só acessa as rotas indicadas em [Cozinha](#cozinha)); `A` = somente Administrador. Enquanto a senha provisória não for trocada, só `/api/me` e `/api/me/senha` respondem.
 
 ## Acesso
 
@@ -43,13 +43,24 @@ Pedido da lanchonete: `ABERTO` (rascunho) → `RECEBIDO` → `EM_PREPARO` → `P
 | POST | `/api/pedidos/:id/confirmar` | A, B | `ABERTO → RECEBIDO`; exige cliente (nome e telefone) e itens; baixa o estoque das bebidas (409 se faltar saldo) |
 | POST | `/api/pedidos/:id/reabrir` | A, B | `RECEBIDO → ABERTO`; estorna o estoque |
 | POST | `/api/pedidos/:id/cancelar` | A, B | `{motivo}` (texto, até 200 caracteres) |
-| POST | `/api/pedidos/:id/status` | A, B, C | `{status: "EM_PREPARO"|"PRONTO_RETIRADA"|"PRONTO_ENTREGA"|"FINALIZADO"}`; quem pode cada mudança é decidido pelo serviço (403 se não puder) |
+| POST | `/api/pedidos/:id/status` | A, B, C | `{status: "EM_PREPARO"|"PRONTO_RETIRADA"|"PRONTO_ENTREGA"|"FINALIZADO"}`; transição inválida 409; alvo fora da lista (inclusive `CANCELADO`, que tem rota própria) 400; sem permissão 403 (tabela abaixo) |
 | GET | `/api/pedidos.csv` | A, B | exportação com os mesmos filtros; colunas: Nº, Data (`dd/mm/aaaa`), Hora (`hh:mm`), Cliente, Telefone, Itens, Total (R$), Tempo estimado (min), Status |
 
 `ItemInput`:
 ```json
 { "tipo": "PRATO" | "BEBIDA", "itemId": 12, "quantidade": 1, "observacao": "sem cebola" }
 ```
+Permissões de `/status` por nível (`PRONTO_*` = `PRONTO_RETIRADA` ou `PRONTO_ENTREGA`):
+
+| Transição | A | B | C |
+| --- | --- | --- | --- |
+| `RECEBIDO → EM_PREPARO` | sim | **não (403)** | sim |
+| `EM_PREPARO → PRONTO_*` | sim | **não (403)** | sim |
+| `PRONTO_* → EM_PREPARO` (desfazer) | sim | **não (403)** | sim |
+| `PRONTO_* → FINALIZADO` | sim | sim | sim |
+
+Confirmar, reabrir e cancelar usam as rotas próprias (A e B; C recebe 403). Qualquer outra transição é 409.
+
 Preços, totais e nomes enviados no corpo são ignorados; o servidor usa o cardápio atual. Corpo ausente ou que não seja um objeto JSON → 400. Ids de rota devem ser inteiros positivos (senão 400). Foram removidas as rotas de mesa/comanda (`itens`, `enviar-cozinha`, `mover`, `finalizar`, `desconto`, `itens/:id/cancelar`, `/api/mesas/:id/comanda`).
 
 ## Pagamentos
@@ -66,8 +77,8 @@ Preços, totais e nomes enviados no corpo são ignorados; o servidor usa o card�
 
 | Método | Rota | Acesso | Descrição |
 | --- | --- | --- | --- |
-| GET | `/api/cozinha` | A, B, C | pedidos em `RECEBIDO`, `EM_PREPARO`, `PRONTO_RETIRADA` e `PRONTO_ENTREGA`, na ordem de confirmação |
-| POST | `/api/pedidos/:id/status` | A, B, C | muda o status operacional (ver Pedidos); a cozinha (C) só avança `RECEBIDO → EM_PREPARO → PRONTO_*` |
+| GET | `/api/cozinha` | A, B, C | pedidos em `RECEBIDO`, `EM_PREPARO`, `PRONTO_RETIRADA` e `PRONTO_ENTREGA`, na ordem de confirmação; rascunhos, `FINALIZADO` e `CANCELADO` não aparecem. Cada `Pedido` traz `id` (nº), `status`, `cliente.nome`, `observacao`, `tempoEstimadoMin`, `confirmadoEm`, e `itens[]` com `nome`, `quantidade`, `observacao` e `modificacoes[]` (personalizações: `tipo` `ADICIONAR`/`REMOVER`, `ingredienteNome`, `quantidade`) |
+| POST | `/api/pedidos/:id/status` | A, B, C | muda o status operacional (permissões por nível em Pedidos) |
 
 O nível **C (Cozinha)** só acessa estas rotas, `/api/eventos` e as rotas de acesso (`/api/me`, `/api/logout`).
 

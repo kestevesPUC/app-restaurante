@@ -7,6 +7,10 @@ const { idPositivo, filtrosDePedidos } = require('../validacaoHttp');
 
 const ITENS_MAX = 100;
 const id = (ctx) => idPositivo(ctx.params.id, 'O pedido');
+const statusValido = (valor) => {
+  if (typeof valor !== 'string' || !STATUS.includes(valor)) throw new ValidationError('Status inválido');
+  return valor;
+};
 
 function limitarItens(body) {
   if (Array.isArray(body.itens) && body.itens.length > ITENS_MAX) throw new ValidationError(`O pedido aceita no máximo ${ITENS_MAX} itens`);
@@ -44,7 +48,7 @@ class PedidoController {
     router.add('GET', '/api/pedidos', (ctx) => s.listar(ctx.user, filtrosDePedidos(ctx.query)));
     router.add('GET', '/api/pedidos.csv',
       (ctx) => FileResponse.csv('pedidos.csv', this.csv.build(COLUNAS_CSV, s.listar(ctx.user, filtrosDePedidos(ctx.query)))));
-    router.add('GET', '/api/pedidos/:id', (ctx) => s.obter(ctx.user, idPositivo(ctx.params.id, 'O pedido')));
+    router.add('GET', '/api/pedidos/:id', (ctx) => s.obter(ctx.user, id(ctx)));
     router.add('POST', '/api/pedidos', (ctx) => {
       if (!Array.isArray(ctx.body.itens)) throw new ValidationError('Os itens devem ser uma lista');
       limitarItens(ctx.body);
@@ -52,6 +56,7 @@ class PedidoController {
     });
     router.add('PUT', '/api/pedidos/:id', (ctx) => {
       const numero = id(ctx);
+      if (ctx.body.itens !== undefined && !Array.isArray(ctx.body.itens)) throw new ValidationError('Os itens devem ser uma lista');
       limitarItens(ctx.body);
       return s.atualizarRascunho(ctx.user, numero, ctx.body);
     });
@@ -60,8 +65,7 @@ class PedidoController {
     router.add('POST', '/api/pedidos/:id/cancelar', (ctx) => s.cancelar(ctx.user, id(ctx), ctx.body.motivo));
     router.add('POST', '/api/pedidos/:id/status', (ctx) => {
       const numero = id(ctx);
-      if (typeof ctx.body.status !== 'string' || !STATUS.includes(ctx.body.status)) throw new ValidationError('Status inválido');
-      return s.mudarStatus(ctx.user, numero, ctx.body.status);
+      return s.mudarStatus(ctx.user, numero, statusValido(ctx.body.status));
     }, { cozinha: true });
     router.add('GET', '/api/cozinha', (ctx) => s.listarCozinha(ctx.user), { cozinha: true });
   }

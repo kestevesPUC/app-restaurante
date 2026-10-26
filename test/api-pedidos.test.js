@@ -230,3 +230,39 @@ test('nível C: 403 em tudo menos cozinha e status; B não muda para EM_PREPARO;
   assert.equal((await post(`/api/pedidos/${q.id}/status`, { status: 'EM_PREPARO' }, 'ADM')).status, 200);
   assert.equal((await post(`/api/pedidos/${q.id}/cancelar`, { motivo: 'teste' }, 'ADM')).status, 200);
 });
+
+test('corpos hostis → 400 em português, nunca 500', async () => {
+  const p = await novo();
+  const itens = [null, [null], [{}], 'x', 5, {}, [[]], [{ tipo: 'PRATO' }], [{ tipo: 'PRATO', itemId: 'a', quantidade: 1 }], [{ tipo: 'PRATO', itemId: c.burger.id, quantidade: -1 }]];
+  const clientes = ['x', [], 5, { nome: 5 }, { nome: {} }, { telefone: {} }, { nome: 'Ana', telefone: [] }];
+  for (const i of itens) {
+    assert.equal((await post('/api/pedidos', { itens: i })).status, 400, `POST itens ${JSON.stringify(i)}`);
+    assert.equal((await put(`/api/pedidos/${p.id}`, { itens: i })).status, 400, `PUT itens ${JSON.stringify(i)}`);
+  }
+  for (const cl of clientes) {
+    const a = await post('/api/pedidos', { itens: [item()], cliente: cl });
+    assert.equal(a.status, 400, `POST cliente ${JSON.stringify(cl)}`);
+    assert.ok(a.body.error);
+    assert.equal((await put(`/api/pedidos/${p.id}`, { cliente: cl })).status, 400, `PUT cliente ${JSON.stringify(cl)}`);
+  }
+  for (const o of [5, {}, [], true]) {
+    assert.equal((await post('/api/pedidos', { itens: [item()], observacao: o })).status, 400, `observacao ${JSON.stringify(o)}`);
+    assert.equal((await put(`/api/pedidos/${p.id}`, { observacao: o })).status, 400);
+  }
+  for (const motivo of [{}, 5, [], null, '', '   ', 'x'.repeat(201)]) {
+    assert.equal((await post(`/api/pedidos/${p.id}/cancelar`, { motivo })).status, 400, `motivo ${JSON.stringify(motivo)}`);
+  }
+  for (const rota of ['', '/confirmar', '/cancelar', '/status', '/reabrir']) {
+    for (const m of ['POST', 'PUT']) {
+      if (m === 'PUT' && rota) continue;
+      const path = `/api/pedidos${m === 'PUT' ? `/${p.id}` : rota ? `/${p.id}${rota}` : ''}`;
+      for (const corpo of [null, 'x', 5, []]) {
+        const r = await app.request(m, path, { user: 'ATEND', body: corpo });
+        assert.equal(r.status, 400, `${m} ${path} ${JSON.stringify(corpo)}`);
+        assert.ok(r.body.error);
+      }
+    }
+  }
+  assert.equal((await req('GET', `/api/pedidos/${p.id}`)).body.status, 'ABERTO');
+  assert.equal(app.erros.length, 0);
+});
