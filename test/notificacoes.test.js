@@ -176,3 +176,60 @@ test('ponta a ponta: confirmar → EM_PREPARO → PRONTO_RETIRADA dispara um env
   await s.notificacoes.aguardarPendentes();
   assert.equal(app.mensageiro.enviadas.length, 1);
 });
+
+test('mensageiro que lança de forma síncrona vira FALHOU ERRO_ENVIO', async () => {
+  await app.close();
+  await subir({ mensageiro: { estado: () => 'CONECTADO', enviar() { throw new Error('x'); } } });
+  const p = emPreparo();
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  assert.equal(linhas(p.id)[0].erro, 'Falha ao enviar a mensagem');
+  assert.equal(linhas(p.id)[0].situacao, 'FALHOU');
+});
+
+test('nome com $& e $1 é preservado literalmente', async () => {
+  const p = emPreparo('Zé $& $1 Silva');
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  assert.match(app.mensageiro.enviadas[0].texto, /^Olá, Zé!/);
+  const r = (nome) => s.notificacoes.renderizar('Olá, {nome}! nº {numero}', { nome, numero: 3 });
+  assert.equal(r('$& Silva'), 'Olá, $&! nº 3');
+  assert.equal(r('$1'), 'Olá, $1! nº 3');
+});
+
+test('pedido sem cliente ou sem telefone: FALHOU visível, sem chamar o mensageiro (automático e reenviar)', async () => {
+  const p = emPreparo();
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  app.mensageiro.enviadas.length = 0;
+  for (const cliente of [null, { id: 1, nome: 'Ana', telefone: null }]) {
+    eventos.length = 0;
+    const pedidoFalso = { id: p.id, status: 'PRONTO_RETIRADA', cliente };
+    const svc = new NotificacaoService({ ...s.notificacoes, carregarPedido: () => pedidoFalso });
+    svc.aoMudarStatus(pedidoFalso, B);
+    await svc.aguardarPendentes();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(eventos.length, 1);
+    assert.equal(eventos[0].situacao, 'FALHOU');
+    assert.equal(eventos[0].erro, 'Pedido sem telefone do cliente');
+    const r = await svc.reenviar(B, p.id);
+    assert.equal(r.situacao, 'FALHOU');
+    assert.equal(r.erro, 'Pedido sem telefone do cliente');
+    assert.equal(r.telefone, '');
+    assert.equal(eventos.length, 2);
+  }
+  assert.equal(app.mensageiro.enviadas.length, 0);
+  assert.equal(s.pedidos.obter(A, p.id).status, 'PRONTO_RETIRADA');
+});
+
+test('bus.publish lançando após o INSERT não derruba o reenviar', async () => {
+  const p = emPreparo();
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  const original = s.notificacoes.bus;
+  s.notificacoes.bus = { publish() { throw new Error('bus'); } };
+  const r = await s.notificacoes.reenviar(B, p.id);
+  s.notificacoes.bus = original;
+  assert.equal(r.situacao, 'ENVIADA');
+  assert.equal(linhas(p.id).length, 2);
+});

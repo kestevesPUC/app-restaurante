@@ -9,6 +9,12 @@ const TIPO_POR_STATUS = Object.freeze({ PRONTO_RETIRADA: 'RETIRADA', PRONTO_ENTR
 const CHAVE_MODELO = Object.freeze({ RETIRADA: 'whatsapp.modelo_retirada', ENTREGA: 'whatsapp.modelo_entrega' });
 const NIVEIS = ['A', 'B'];
 
+class SemTelefone extends Error {
+  constructor() {
+    super('Pedido sem telefone do cliente');
+  }
+}
+
 function exigirNivel(user) {
   if (!user || !NIVEIS.includes(user.nivel)) throw new ForbiddenError('Sem permissão para notificações');
 }
@@ -92,21 +98,27 @@ class NotificacaoService {
   /** Envia, grava a linha e publica o evento. Devolve a linha gravada ou null se nem isso foi possível. Nunca lança. */
   async #enviar(pedido, tipo, { automatica, user }) {
     try {
-      const telefone = pedido.cliente?.telefone;
+      const telefone = typeof pedido.cliente?.telefone === 'string' ? pedido.cliente.telefone : '';
       const texto = this.renderizar(this.config.get(CHAVE_MODELO[tipo]), { nome: pedido.cliente?.nome, numero: pedido.id });
       let situacao = 'ENVIADA';
       let erro = null;
       try {
+        // pedido sem telefone: não chama o mensageiro, mas a falha fica registrada e visível
+        if (!telefone) throw new SemTelefone();
         await comLimite(Promise.resolve().then(() => this.mensageiro.enviar({ telefoneE164: telefone, texto })), this.timeoutMs);
       } catch (error) {
         situacao = 'FALHOU';
-        erro = error instanceof MensageiroError ? error.message : new MensageiroError('ERRO_ENVIO').message;
+        erro = error instanceof SemTelefone || error instanceof MensageiroError ? error.message : new MensageiroError('ERRO_ENVIO').message;
         this.logger?.error?.(error);
       }
       const linha = this.repository.insert({
         pedidoId: pedido.id, tipo, telefone, texto, situacao, erro, automatica, enviadaPor: automatica ? null : user.id, em: new Date(this.relogio()).toISOString(),
       });
-      this.bus?.publish('notificacao', { id: linha.id, pedidoId: pedido.id, situacao, erro, automatica });
+      try {
+        this.bus?.publish('notificacao', { id: linha.id, pedidoId: pedido.id, situacao, erro, automatica });
+      } catch (error) {
+        this.logger?.error?.(error); // a linha já foi gravada: falha do evento não invalida o resultado
+      }
       return linha;
     } catch (error) {
       this.logger?.error?.(error);
