@@ -65,7 +65,7 @@ class UsuarioService {
     if (antes.ativo && !ativo && actor?.id === antes.id) throw new ConflictError('Não é possível desativar a si mesmo');
 
     const depois = this.usuarios.update(antes.id, { nome, nivel, ativo });
-    if (antes.ativo && !ativo) this.sessions?.destroyForUser(antes.id);
+    if ((antes.ativo && !ativo) || nivel !== antes.nivel) this.sessions?.destroyForUser(antes.id);
     this.audit.record({
       actor, acao: 'alterar', entidade: 'usuario', entidadeId: antes.id, descricao: `Usuário ${antes.usuario} alterado`,
       antes: usuarioSnapshot(antes), depois: usuarioSnapshot(depois),

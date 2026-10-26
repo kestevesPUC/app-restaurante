@@ -6,6 +6,7 @@ const { usuarioPublico } = require('../domain/usuarioPublico');
 const AuditTrail = require('./AuditTrail');
 
 const SENHA_MINIMA = 6;
+const chaveSenha = (user) => `senha:${user.id}`;
 
 /** Autenticação (RN-01): login com bloqueio por tentativas, sessões e troca de senha. Tudo é auditado. */
 class AuthService {
@@ -23,6 +24,8 @@ class AuthService {
     this.sessions = sessions;
     this.throttle = throttle;
     this.audit = audit;
+    // Hash fixo para igualar o tempo de resposta quando o usuário não existe ou está inativo.
+    this.dummyHash = hasher.hash('senha-inexistente');
   }
 
   /** @returns {{sid: string, user: object}} */
@@ -33,7 +36,8 @@ class AuthService {
       throw new TooManyAttemptsError();
     }
     const user = this.usuarios.findByUsuario(login);
-    if (!user || !user.ativo || !this.hasher.verify(String(senha || ''), user.senhaHash)) {
+    const senhaOk = this.hasher.verify(String(senha || ''), user ? user.senhaHash : this.dummyHash);
+    if (!user || !user.ativo || !senhaOk) {
       this.throttle.registerFailure(login);
       this.#registrarTentativa(login, 'login_falha', `Tentativa de login com senha incorreta (${login})`);
       throw new UnauthorizedError('Usuário ou senha incorretos');
@@ -61,11 +65,23 @@ class AuthService {
     return usuarioPublico(user);
   }
 
+  /**
+   * Senha atual errada conta no throttle (3 erros / 5 min). Após a troca todas as sessões do usuário
+   * são encerradas (inclusive a atual): ele precisa entrar de novo com a senha nova.
+   */
   trocarSenha(user, atual, nova) {
+    const chave = chaveSenha(user);
+    if (this.throttle.isBlocked(chave)) throw new TooManyAttemptsError();
     const entidade = this.usuarios.findById(user.id);
-    if (!entidade || !this.hasher.verify(String(atual || ''), entidade.senhaHash)) throw new ValidationError('Senha atual incorreta');
+    if (!entidade || !this.hasher.verify(String(atual || ''), entidade.senhaHash)) {
+      this.throttle.registerFailure(chave);
+      throw new ValidationError('Senha atual incorreta');
+    }
     if (String(nova || '').length < SENHA_MINIMA) throw new ValidationError(`A senha deve ter ao menos ${SENHA_MINIMA} caracteres`);
+    if (nova === atual) throw new ValidationError('A nova senha deve ser diferente da atual');
+    this.throttle.reset(chave);
     this.usuarios.updatePassword(entidade.id, this.hasher.hash(nova), false);
+    this.sessions.destroyForUser(entidade.id);
     this.audit.record({ actor: user, acao: 'senha', entidade: 'usuario', entidadeId: entidade.id, descricao: `${entidade.usuario} trocou a própria senha` });
   }
 

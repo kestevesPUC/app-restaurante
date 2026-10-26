@@ -108,6 +108,46 @@ test('trocarSenha exige senha atual e mínimo de 6', () => {
   assert.equal(auth.login('ADMIN', 'novasenha').user.mustChange, false);
 });
 
+test('trocarSenha rejeita senha igual, encerra sessões e limita tentativas', () => {
+  const { sid, user } = auth.login('ADMIN', senhaAdmin);
+  assert.throws(() => auth.trocarSenha(user, senhaAdmin, senhaAdmin), /diferente/);
+  auth.trocarSenha(user, senhaAdmin, 'novasenha');
+  assert.equal(auth.resolveUser(sid), null);
+  const { user: u2 } = auth.login('ADMIN', 'novasenha');
+  for (let i = 0; i < 3; i += 1) assert.throws(() => auth.trocarSenha(u2, 'errada', 'outrasenha'), ValidationError);
+  assert.throws(() => auth.trocarSenha(u2, 'novasenha', 'outrasenha'), TooManyAttemptsError);
+  t += 6 * MIN;
+  auth.trocarSenha(u2, 'novasenha', 'outrasenha');
+});
+
+test('login de usuário inexistente executa a verificação de senha (tempo constante)', () => {
+  let chamadas = 0;
+  const original = hasher.verify.bind(hasher);
+  hasher.verify = (...args) => { chamadas += 1; return original(...args); };
+  assert.throws(() => auth.login('FANTASMA', 'x'), UnauthorizedError);
+  assert.equal(chamadas, 1);
+});
+
+test('mudar o nível encerra as sessões vivas do usuário', () => {
+  const { user, senhaProvisoria } = criarUsuario('TROCA', 'C');
+  const { sid } = auth.login('TROCA', senhaProvisoria);
+  usuarioService.atualizar(admin, user.id, { nivel: 'B' });
+  assert.equal(auth.resolveUser(sid), null);
+});
+
+test('LoginThrottle poda entradas expiradas e limita o tamanho da chave', () => {
+  const th = new LoginThrottle({ now: () => t });
+  for (let i = 0; i < 50; i += 1) th.registerFailure(`U${i}`);
+  assert.equal(th.failures.size, 50);
+  t += 6 * MIN;
+  th.registerFailure('NOVO');
+  assert.equal(th.failures.size, 1);
+  th.registerFailure('X'.repeat(500));
+  assert.ok([...th.failures.keys()].every((k) => k.length <= 64));
+  for (let i = 0; i < 2; i += 1) th.registerFailure('X'.repeat(600));
+  assert.equal(th.isBlocked('X'.repeat(70)), true);
+});
+
 test('não rebaixa nem desativa o último administrador', () => {
   assert.throws(() => usuarioService.atualizar(admin, admin.id, { nivel: 'B' }), /último administrador/);
   assert.throws(() => usuarioService.atualizar(admin, admin.id, { ativo: false }), /último administrador/);
