@@ -33,6 +33,8 @@ const ClienteController = require('./presentation/http/controllers/ClienteContro
 const ClienteService = require('./application/ClienteService');
 const RelatorioRepository = require('./infrastructure/repositories/RelatorioRepository');
 const RelatorioService = require('./application/RelatorioService');
+const ExcelExportador = require('./infrastructure/export/ExcelExportador');
+const PdfExportador = require('./infrastructure/export/PdfExportador');
 const RelatorioController = require('./presentation/http/controllers/RelatorioController');
 const NotificacaoRepository = require('./infrastructure/repositories/NotificacaoRepository');
 const MensageiroSimulado = require('./infrastructure/whatsapp/MensageiroSimulado');
@@ -164,7 +166,7 @@ function buildApplication({
   new NotificacaoController(services.notificacoes, services.config).register(router);
   new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp, logger }).register(router);
   new ClienteController(services.clientes).register(router);
-  new RelatorioController(services.relatorios).register(router);
+  new RelatorioController(services.relatorios, { xlsx: new ExcelExportador({ agora: () => new Date(relogio()) }), pdf: new PdfExportador({ agora: () => new Date(relogio()) }) }, relogio).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
   new AuditController(repositories.auditoria).register(router);

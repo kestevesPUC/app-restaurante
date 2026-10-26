@@ -169,7 +169,7 @@ Só nível A (B e C → 403, inclusive para tipo inexistente). Datas **locais** 
 | Método | Rota | Descrição |
 | --- | --- | --- |
 | GET | `/api/relatorios` | tipos disponíveis: `[{tipo, titulo, filtros}]` |
-| GET | `/api/relatorios/:tipo` | filtros `de`, `ate`, `agrupar` (`dia`\|`mes`\|`ano`, padrão `dia`), `limite` (1–200, padrão 20, rankings); tipo inexistente → 404 |
+| GET | `/api/relatorios/:tipo` | filtros `de`, `ate`, `agrupar` (`dia`\|`mes`\|`ano`, padrão `dia`), `limite` (1–200, padrão 20, rankings); `formato` (`json` padrão, `xlsx` ou `pdf`; outro valor → 400; os arquivos saem como download `relatorio-<tipo>-AAAA-MM-DD.<ext>`); tipo inexistente → 404 |
 
 Resposta: `{ titulo, periodo: {de, ate} | null, colunas: [{chave, titulo, tipo}], linhas, totais }` com `tipo` ∈ `texto|inteiro|dinheiro|duracao|data`; dinheiro em centavos, duração em segundos. Período sem dados → `linhas: []` e totais zerados.
 

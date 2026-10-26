@@ -1,18 +1,39 @@
 'use strict';
 const ValidationError = require('../../../domain/errors/ValidationError');
 const { dataIso, idPositivo } = require('../validacaoHttp');
+const FileResponse = require('../FileResponse');
 const { AGRUPAMENTOS, LIMITE_MAXIMO } = require('../../../domain/relatorio/tipos');
 
 /** Rotas de /api/relatorios (só A; a autorização fica no serviço). */
 class RelatorioController {
-  /** @param {import('../../../application/RelatorioService')} relatorios */
-  constructor(relatorios) {
+  /**
+   * @param {import('../../../application/RelatorioService')} relatorios
+   * @param {Record<string, import('../../../application/ports/ExportadorRelatorio').ExportadorRelatorio>} exportadores por formato (xlsx, pdf)
+   * @param {() => number} relogio
+   */
+  constructor(relatorios, exportadores = {}, relogio = Date.now) {
     this.relatorios = relatorios;
+    this.exportadores = exportadores;
+    this.relogio = relogio;
   }
 
   register(router) {
     router.add('GET', '/api/relatorios', (ctx) => this.relatorios.listar(ctx.user));
-    router.add('GET', '/api/relatorios/:tipo', (ctx) => this.relatorios.gerar(ctx.user, ctx.params.tipo, this.#filtros(ctx.query)));
+    router.add('GET', '/api/relatorios/:tipo', (ctx) => this.#gerar(ctx));
+  }
+
+  async #gerar(ctx) {
+    const formato = ctx.query?.formato ?? 'json';
+    const filtros = this.#filtros(ctx.query);
+    const relatorio = this.relatorios.gerar(ctx.user, ctx.params.tipo, filtros);
+    if (formato === 'json') return relatorio;
+    const exportador = Object.hasOwn(this.exportadores, formato) ? this.exportadores[formato] : null;
+    if (!exportador) throw new ValidationError('Formato inválido: use json, xlsx ou pdf');
+    const d = new Date(this.relogio());
+    const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return new FileResponse({
+      filename: `relatorio-${ctx.params.tipo}-${dia}.${exportador.extensao}`, contentType: exportador.contentType, body: await exportador.exportar(relatorio),
+    });
   }
 
   #filtros(query = {}) {
