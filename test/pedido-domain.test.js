@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const ValidationError = require('../src/domain/errors/ValidationError');
 const { calcularItem, calcularPedido } = require('../src/domain/pedido/calculos');
 const { SITUACOES, podeTransitar } = require('../src/domain/pedido/situacoes');
-const { validarItem, validarIdentificacao } = require('../src/domain/pedido/ItemValidator');
+const { validarItem, validarItemBebida, validarIdentificacao } = require('../src/domain/pedido/ItemValidator');
 
 const invalido = (fn) => assert.throws(fn, ValidationError);
 
@@ -183,4 +183,34 @@ test('clienteNome com mais de 60 caracteres e tipo inválido → erro', () => {
   assert.equal(validarIdentificacao({ tipo: 'BALCAO', clienteNome: 'a'.repeat(60) }).clienteNome.length, 60);
   invalido(() => validarIdentificacao({ tipo: 'DELIVERY', clienteNome: 'x' }));
   invalido(() => validarIdentificacao({}));
+});
+
+// ---- validarItemBebida ----
+const bebidaOk = { id: 9, ativo: true };
+
+test('validarItemBebida normaliza entrada válida', () => {
+  assert.deepEqual(validarItemBebida({ tipo: 'BEBIDA', itemId: 9, quantidade: 2, observacao: '  gelada ' }, bebidaOk),
+    { tipo: 'BEBIDA', bebidaId: 9, quantidade: 2, observacao: 'gelada' });
+  assert.equal(validarItemBebida({ quantidade: 1, observacao: '   ' }, bebidaOk).observacao, null);
+});
+
+test('validarItemBebida rejeita bebida inativa/ausente, quantidade inválida e remover/adicionar', () => {
+  invalido(() => validarItemBebida({ quantidade: 1 }, { id: 9, ativo: false }));
+  invalido(() => validarItemBebida({ quantidade: 1 }, null));
+  invalido(() => validarItemBebida(null, bebidaOk));
+  for (const q of [0, 1.5, '1', NaN, -1, undefined]) invalido(() => validarItemBebida({ quantidade: q }, bebidaOk));
+  invalido(() => validarItemBebida({ quantidade: 1, remover: [1] }, bebidaOk));
+  invalido(() => validarItemBebida({ quantidade: 1, adicionar: [{ ingredienteId: 1, quantidade: 1 }] }, bebidaOk));
+  assert.equal(validarItemBebida({ quantidade: 1, remover: [], adicionar: [] }, bebidaOk).quantidade, 1);
+});
+
+test('validarItemBebida: observação 140 ok (emoji conta 1), 141 erro', () => {
+  assert.equal(validarItemBebida({ quantidade: 1, observacao: 'a'.repeat(140) }, bebidaOk).observacao.length, 140);
+  assert.equal([...validarItemBebida({ quantidade: 1, observacao: '😀'.repeat(140) }, bebidaOk).observacao].length, 140);
+  invalido(() => validarItemBebida({ quantidade: 1, observacao: 'a'.repeat(141) }, bebidaOk));
+  invalido(() => validarItemBebida({ quantidade: 1, observacao: '😀'.repeat(141) }, bebidaOk));
+});
+
+test('validarItem com tipo BEBIDA é rejeitado (use validarItemBebida)', () => {
+  invalido(() => validarItem({ tipo: 'BEBIDA', quantidade: 1 }, prato, adicionais));
 });

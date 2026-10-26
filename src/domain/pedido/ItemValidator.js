@@ -34,6 +34,7 @@ function observacaoDe(valor) {
  */
 function validarItem(entrada, prato, adicionaisDisponiveis) {
   if (!entrada || typeof entrada !== 'object') throw new ValidationError('Informe os dados do item');
+  if (entrada.tipo !== undefined && entrada.tipo !== 'PRATO') throw new ValidationError('Use a validação de bebida para itens do tipo BEBIDA');
   const quantidade = quantidadeInteira(entrada.quantidade, 'A quantidade');
   const observacao = observacaoDe(entrada.observacao);
 
@@ -60,6 +61,22 @@ function validarItem(entrada, prato, adicionaisDisponiveis) {
   return { pratoId: prato.id, quantidade, observacao, remover, adicionar };
 }
 
+/**
+ * Valida e normaliza um item de bebida: { tipo:'BEBIDA', itemId, quantidade, observacao }.
+ * bebida: { id, ativo }. Não aceita remover/adicionar não vazios.
+ * retorno: { tipo:'BEBIDA', bebidaId, quantidade, observacao }
+ */
+function validarItemBebida(entrada, bebida) {
+  if (!entrada || typeof entrada !== 'object') throw new ValidationError('Informe os dados do item');
+  if (!bebida || !bebida.ativo) throw new ValidationError('Bebida indisponível');
+  const quantidade = quantidadeInteira(entrada.quantidade, 'A quantidade');
+  const observacao = observacaoDe(entrada.observacao);
+  if (lista(entrada.remover, 'remover').length || lista(entrada.adicionar, 'adicionar').length) {
+    throw new ValidationError('Bebidas não aceitam remover nem adicionar');
+  }
+  return { tipo: 'BEBIDA', bebidaId: bebida.id, quantidade, observacao };
+}
+
 /** Identificação do pedido: MESA exige mesaId; BALCAO exige nome do cliente. */
 function validarIdentificacao({ tipo, mesaId, clienteNome } = {}) {
   if (tipo !== 'BALCAO' && tipo !== 'MESA') throw new ValidationError('O tipo do pedido deve ser BALCAO ou MESA');
@@ -76,4 +93,4 @@ function validarIdentificacao({ tipo, mesaId, clienteNome } = {}) {
   return { tipo, mesaId: null, clienteNome: nome };
 }
 
-module.exports = { validarItem, validarIdentificacao, OBSERVACAO_MAX, CLIENTE_NOME_MAX };
+module.exports = { validarItem, validarItemBebida, validarIdentificacao, OBSERVACAO_MAX, CLIENTE_NOME_MAX };
