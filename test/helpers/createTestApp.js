@@ -53,7 +53,7 @@ async function createTestApp(overrides = {}) {
 
   for (const nome of ['ADM', 'ATEND', 'COZ', 'PROV']) await login(nome);
 
-  return { request, login, baseUrl, relogio, erros, bus: app.bus, db: app.db, app, close: () => app.close() };
+  return { request, login, baseUrl, relogio, erros, bus: app.bus, db: app.db, mensageiro: app.mensageiro, app, close: () => app.close() };
 }
 
 module.exports = { createTestApp, SENHAS };

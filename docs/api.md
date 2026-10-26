@@ -149,3 +149,15 @@ Autenticação por cabeçalho `Authorization: Bearer <token do terminal>` (gerad
 | `cozinha` | `{envioId, pedidoId, cozinhaSituacao, novo: bool}` — o andon recarrega o cartão e toca o aviso quando `novo` |
 
 O nível C recebe apenas eventos `cozinha`.
+
+## Notificações de WhatsApp
+
+Ao passar para `PRONTO_RETIRADA` ou `PRONTO_ENTREGA`, o sistema envia ao cliente a mensagem do modelo correspondente, em segundo plano. Falhas nunca alteram o status do pedido: viram uma linha `FALHOU` no histórico. Voltar para `EM_PREPARO` e ficar pronto de novo envia outra mensagem (sem deduplicação).
+
+| Método | Rota | Nível | Descrição |
+| --- | --- | --- | --- |
+| GET | `/api/pedidos/:id/notificacoes` | A, B | histórico, mais recente primeiro: `{id, pedidoId, tipo, telefone, texto, situacao, erro, automatica, enviadaPor, em}` |
+| POST | `/api/pedidos/:id/notificacoes/reenviar` | A, B | reenvia (só com o pedido pronto, senão 409); responde 200 com a linha gravada, inclusive `FALHOU` |
+| GET/PUT | `/api/config/whatsapp` | A | `{numeroEmpresa, modeloRetirada, modeloEntrega}`; PUT aceita campos parciais. Modelos: 1–1000 caracteres, com `{nome}` (primeiro nome) e `{numero}`; `numeroEmpresa` vazio ou telefone válido (gravado em E.164) |
+
+Evento SSE `notificacao`: `{id, pedidoId, situacao, erro, automatica}`.

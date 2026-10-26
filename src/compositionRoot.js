@@ -31,6 +31,10 @@ const BebidaService = require('./application/BebidaService');
 const EstoqueService = require('./application/EstoqueService');
 const ClienteController = require('./presentation/http/controllers/ClienteController');
 const ClienteService = require('./application/ClienteService');
+const NotificacaoRepository = require('./infrastructure/repositories/NotificacaoRepository');
+const MensageiroSimulado = require('./infrastructure/whatsapp/MensageiroSimulado');
+const NotificacaoService = require('./application/NotificacaoService');
+const NotificacaoController = require('./presentation/http/controllers/NotificacaoController');
 const PedidoService = require('./application/PedidoService');
 const MontadorDeItens = require('./application/MontadorDeItens');
 const ConsultaDePedidos = require('./application/ConsultaDePedidos');
@@ -61,9 +65,12 @@ const HORA = 60 * 60 * 1000;
  * @param {string} [options.publicDir] pasta dos arquivos estáticos
  * @param {Pick<Console,'error'>} [options.logger]
  * @param {number} [options.heartbeatMs] intervalo do batimento do canal SSE
+ * @param {import('./application/ports/Mensageiro').Mensageiro} [options.mensageiro] padrão: MensageiroSimulado
+ * @param {number} [options.notificacaoTimeoutMs] limite de cada envio de WhatsApp
  */
 function buildApplication({
   dbPath = ':memory:', relogio = Date.now, publicDir = path.join(__dirname, '..', 'public'), logger = console, heartbeatMs,
+  mensageiro = new MensageiroSimulado(), notificacaoTimeoutMs,
 } = {}) {
   const clock = () => new Date(relogio());
   const db = new SqliteDatabase(dbPath);
@@ -80,6 +87,7 @@ function buildApplication({
     bebidas: new BebidaRepository(db),
     movimentacoes: new MovimentacaoRepository(db),
     clientes: new ClienteRepository(db),
+    notificacoes: new NotificacaoRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -105,9 +113,19 @@ function buildApplication({
   services.bebidas = new BebidaService({ db, repository: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.estoque = new EstoqueService({ db, bebidas: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.clientes = new ClienteService({ repository: repositories.clientes, audit, clock });
+  const consulta = new ConsultaDePedidos({ repository: repositories.pedidos, config: services.config, relogio });
+  // PedidoService chama a porta `aposMudarStatus` e NotificacaoService precisa do pedido carregado (consulta.carregar):
+  // a função abaixo só resolve `services.notificacoes` no momento da chamada, depois de tudo construído.
+  const aposMudarStatus = (pedido, user) => services.notificacoes.aoMudarStatus(pedido, user);
+  services.notificacoes = new NotificacaoService({
+    repository: repositories.notificacoes, mensageiro, carregarPedido: (id) => {
+      try { return consulta.carregar(id); } catch (error) { if (error?.status === 404) return null; throw error; }
+    },
+    config: services.config, audit, bus, relogio, logger, ...(notificacaoTimeoutMs && { timeoutMs: notificacaoTimeoutMs }),
+  });
   services.pedidos = new PedidoService({
     db, repository: repositories.pedidos, estoque: services.estoque, clientes: services.clientes, config: services.config, audit, bus, relogio, logger,
-    consulta: new ConsultaDePedidos({ repository: repositories.pedidos, config: services.config, relogio }),
+    consulta, aposMudarStatus,
     montador: new MontadorDeItens({
       pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, bebidas: repositories.bebidas,
     }),
@@ -122,6 +140,7 @@ function buildApplication({
   new CardapioController(services.pratos).register(router);
   new MesaController(services.mesas).register(router);
   new PedidoController(services.pedidos).register(router);
+  new NotificacaoController(services.notificacoes, services.config).register(router);
   new ClienteController(services.clientes).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
@@ -131,9 +150,10 @@ function buildApplication({
   const server = new HttpServer({ router, authService: services.auth, staticHandler: new StaticFileHandler(publicDir), logger });
 
   return {
-    server, services, repositories, bus, db,
+    server, services, repositories, bus, db, mensageiro,
     async close() {
       await server.close();
+      await Promise.race([services.notificacoes.aguardarPendentes(), new Promise((r) => setTimeout(r, 2000).unref())]);
       db.close();
     },
   };
