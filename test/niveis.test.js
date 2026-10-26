@@ -9,13 +9,13 @@ const ids = (itens) => itens.map((r) => r.id);
 
 test('menu por nível: A vê Cardápio e Gestão, B só o Cardápio, C não tem menu', async () => {
   const { menuPara, rotaInicial, podeAcessar } = await carregar();
-  assert.deepEqual(ids(menuPara('A')), ['pratos', 'ingredientes', 'categorias', 'usuarios', 'auditoria', 'sobre']);
-  assert.deepEqual(ids(menuPara('B')), ['pratos', 'ingredientes', 'categorias', 'sobre']);
+  assert.deepEqual(ids(menuPara('A')), ['andon', 'cardapio', 'ingredientes', 'pratos', 'categorias', 'usuarios', 'auditoria', 'sobre']);
+  assert.deepEqual(ids(menuPara('B')), ['cardapio', 'sobre']);
   assert.deepEqual(menuPara('C'), []);
   assert.equal(rotaInicial('C'), 'andon');
   assert.equal(podeAcessar('B', 'usuarios'), false);
   assert.equal(podeAcessar('C', 'sobre'), false);
   assert.equal(podeAcessar('C', 'pratos'), false);
-  assert.equal(podeAcessar('B', 'pratos'), true);
+  assert.equal(podeAcessar('B', 'cardapio'), true);
   assert.equal(podeAcessar('C', 'andon'), true);
 });

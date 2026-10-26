@@ -165,7 +165,7 @@ function buildApplication({
   new CadastroController('categorias', services.categorias).register(router);
   new CadastroController('ingredientes', services.ingredientes).register(router);
   new PratoController(services.pratos).register(router);
-  new CardapioController(services.pratos).register(router);
+  new CardapioController(services.pratos, services.bebidas).register(router);
   new MesaController(services.mesas).register(router);
   new PedidoController(services.pedidos).register(router);
   new NotificacaoController(services.notificacoes, services.config).register(router);

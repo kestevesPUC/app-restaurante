@@ -9,16 +9,17 @@ export const nivelNome = (id) => NIVEIS.find((n) => n.id === id)?.nome || id;
 /**
  * Registro de rotas. Para criar uma tela: acrescente a entrada aqui e a função da tela em `main.js` (VIEWS).
  * `menu: false` = acessível pelo endereço (#/id) mas fora do menu; `grupo` = seção do menu ('' = sem seção).
- * Ainda por vir (tarefas seguintes): pedido-novo, pedidos, mesas, fila, andon no menu, configuracoes.
+ * Ainda por vir (tarefas seguintes): pedido-novo, pedidos, clientes, relatorios, bebidas, configuracoes.
  */
 export const ROTAS = [
-  { id: 'pratos', rotulo: 'Pratos', subtitulo: 'Cardápio: pratos, preços, fotos e ingredientes', icone: 'dish', grupo: 'Cardápio', niveis: ['A', 'B'] },
-  { id: 'ingredientes', rotulo: 'Ingredientes', subtitulo: 'Ingredientes e preço de adicional', icone: 'leaf', grupo: 'Cardápio', niveis: ['A', 'B'] },
-  { id: 'categorias', rotulo: 'Categorias', subtitulo: 'Seções do cardápio e destino da cozinha', icone: 'tag', grupo: 'Cardápio', niveis: ['A', 'B'] },
+  { id: 'andon', rotulo: 'Cozinha', subtitulo: 'Pedidos em preparo', icone: 'chef', grupo: '', niveis: ['A', 'C'] },
+  { id: 'cardapio', rotulo: 'Cardápio', subtitulo: 'Pratos e bebidas (consulta)', icone: 'book', grupo: '', niveis: ['A', 'B'] },
+  { id: 'ingredientes', rotulo: 'Ingredientes', subtitulo: 'Ingredientes e preço de adicional', icone: 'leaf', grupo: 'Cadastros', niveis: ['A'] },
+  { id: 'pratos', rotulo: 'Pratos', subtitulo: 'Cadastro de pratos, preços, fotos e ingredientes', icone: 'dish', grupo: 'Cadastros', niveis: ['A'] },
+  { id: 'categorias', rotulo: 'Categorias', subtitulo: 'Seções do cardápio e destino da cozinha', icone: 'tag', grupo: 'Cadastros', niveis: ['A'] },
   { id: 'usuarios', rotulo: 'Usuários', subtitulo: 'Acesso ao sistema', icone: 'users', grupo: 'Gestão', niveis: ['A'] },
   { id: 'auditoria', rotulo: 'Auditoria', subtitulo: 'Quem fez o quê e quando', icone: 'shield', grupo: 'Gestão', niveis: ['A'] },
   { id: 'sobre', rotulo: 'Sobre', subtitulo: 'O sistema', icone: 'info', grupo: '', niveis: ['A', 'B'] },
-  { id: 'andon', rotulo: 'Andon da cozinha', subtitulo: 'Pedidos em preparo', icone: 'chef', grupo: '', niveis: ['A', 'B', 'C'], menu: false },
 ];
 
 /** Rotas que o nível pode abrir. */
