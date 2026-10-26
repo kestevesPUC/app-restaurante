@@ -12,11 +12,14 @@ import { viewUsuarios } from './views/usuarios.js';
 import { viewAuditoria } from './views/auditoria.js';
 import { viewSobre } from './views/sobre.js';
 import { viewAndon } from './views/andon.js';
+import { viewPratos } from './views/pratos.js';
+import { viewIngredientes } from './views/ingredientes.js';
+import { viewCategorias } from './views/categorias.js';
 
 const root = document.getElementById('app');
 
 // Telas por id de rota (os ids e as permissões ficam em ROTAS, em niveis.js).
-const VIEWS = { usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
+const VIEWS = { pratos: viewPratos, ingredientes: viewIngredientes, categorias: viewCategorias, usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
 
 let eventos = null;
 
