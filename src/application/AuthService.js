@@ -47,6 +47,11 @@ class AuthService {
     return { sid: this.sessions.create(user.id, user.nivel), user: usuarioPublico(user) };
   }
 
+  /** Abre sessão para um usuário já autenticado (uso interno, ex.: após a troca de senha). Não confere senha. */
+  abrirSessao(user) {
+    return this.sessions.create(user.id, user.nivel);
+  }
+
   logout(sid) {
     const user = this.resolveUser(sid);
     this.sessions.destroy(sid);
