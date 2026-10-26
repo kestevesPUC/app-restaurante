@@ -3,7 +3,7 @@ const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
 
-// Rotas de consulta de pedidos. As rotas de escrita voltam na Tarefa 6; aqui os pedidos são criados pelo serviço.
+// API de pedidos: consulta (pedidos criados pelo serviço) e escrita (rascunho, confirmar, reabrir, cancelar, status).
 let app; let s; let B; let c;
 const DIA = 24 * 60 * 60 * 1000;
 
@@ -80,10 +80,12 @@ test('pedidos.csv neutraliza célula começando com = + - @', async () => {
   assert.match(res.headers.get('content-type'), /^text\/csv; charset=utf-8/);
   assert.match(res.headers.get('content-disposition'), /^attachment/);
   const linhas = res.body.trim().split('\r\n');
-  assert.equal(linhas[0], 'Nº;Data/hora;Cliente;Telefone;Itens;Total (R$);Status');
-  assert.deepEqual(linhas.slice(1).map((l) => l.split(';')[2]), ["'=1+1", "'+SOMA(A1)", "'-2", "'@cmd", 'Normal']);
-  assert.equal(linhas[1].split(';')[5], '25,00');
-  assert.equal(linhas[1].split(';')[3], "'+5511999998888");
+  assert.equal(linhas[0], 'Nº;Data;Hora;Cliente;Telefone;Itens;Total (R$);Tempo estimado (min);Status');
+  assert.match(linhas[1], /^\d+;\d{2}\/\d{2}\/\d{4};\d{2}:\d{2};/);
+  assert.deepEqual(linhas.slice(1).map((l) => l.split(';')[3]), ["'=1+1", "'+SOMA(A1)", "'-2", "'@cmd", 'Normal']);
+  assert.equal(linhas[1].split(';')[6], '25,00');
+  assert.equal(linhas[1].split(';')[4], "'+5511999998888");
+  assert.equal(linhas[1].split(';')[7], '10');
 });
 
 test('nome de cliente com acento, emoji e & vai e volta intacto no JSON e no CSV', async () => {
@@ -115,9 +117,116 @@ test('de inválido → 400', async () => {
   assert.equal((await req('GET', '/api/pedidos?de=2026-10-23&ate=2026-10-24')).status, 200);
 });
 
-test('rotas antigas de escrita não existem mais (voltam na Tarefa 6)', async () => {
+test('rotas antigas não existem mais', async () => {
   const p = pedido();
-  for (const [m, path] of [['POST', '/api/pedidos'], ['POST', `/api/pedidos/${p.id}/finalizar`], ['POST', `/api/pedidos/${p.id}/enviar-cozinha`], ['GET', '/api/mesas/1/comanda']]) {
+  for (const [m, path] of [['POST', `/api/pedidos/${p.id}/finalizar`], ['POST', `/api/pedidos/${p.id}/enviar-cozinha`], ['POST', `/api/pedidos/${p.id}/itens`], ['POST', `/api/pedidos/${p.id}/mover`], ['POST', `/api/pedidos/${p.id}/desconto`], ['GET', '/api/mesas/1/comanda']]) {
     assert.equal((await req(m, path)).status, 404, path);
   }
+});
+
+test('de > ate → 400; q com mais de 80 caracteres → 400', async () => {
+  assert.equal((await req('GET', '/api/pedidos?de=2026-10-24&ate=2026-10-23')).status, 400);
+  assert.equal((await req('GET', '/api/pedidos.csv?de=2026-10-24&ate=2026-10-23')).status, 400);
+  assert.equal((await req('GET', `/api/pedidos?q=${'a'.repeat(81)}`)).status, 400);
+  assert.equal((await req('GET', `/api/pedidos?q=${'a'.repeat(80)}`)).status, 200);
+  assert.equal((await req('GET', '/api/pedidos?q=a&q=b')).status, 200, 'q repetido: vale o último');
+});
+
+test('busca q por número, nome com acento e parte do telefone', async () => {
+  const joao = pedido('João Ávila', '(11) 98888-1111');
+  const ana = pedido('Ana', '(11) 99999-8888');
+  const ids = async (q) => (await req('GET', `/api/pedidos?q=${encodeURIComponent(q)}`)).body.map((p) => p.id);
+  assert.deepEqual(await ids(String(ana.id)), [ana.id]);
+  assert.deepEqual(await ids('joao'), [joao.id]);
+  assert.deepEqual(await ids('ÁVILA'), [joao.id]);
+  assert.deepEqual(await ids('99999'), [ana.id]);
+});
+
+const item = () => ({ tipo: 'PRATO', itemId: c.burger.id, quantidade: 2 });
+const post = (path, body, user = 'ATEND') => app.request('POST', path, { user, body });
+const put = (path, body, user = 'ATEND') => app.request('PUT', path, { user, body });
+const novo = async (extra = {}) => (await post('/api/pedidos', { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [item()], ...extra })).body;
+
+test('fluxo completo: rascunho → confirmar → EM_PREPARO → PRONTO_RETIRADA → FINALIZADO', async () => {
+  const criado = await post('/api/pedidos', { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [item()], observacao: 'sem cebola', totalCents: 1, precoCents: 1 });
+  assert.equal(criado.status, 200);
+  assert.equal(criado.body.status, 'ABERTO');
+  assert.equal(criado.body.totalCents, 5000, 'preço do corpo é ignorado');
+  const id = criado.body.id;
+  const alt = await put(`/api/pedidos/${id}`, { itens: [{ ...item(), quantidade: 1 }] });
+  assert.equal(alt.status, 200);
+  assert.equal(alt.body.totalCents, 2500);
+  assert.equal((await post(`/api/pedidos/${id}/confirmar`)).body.status, 'RECEBIDO');
+  assert.equal((await post(`/api/pedidos/${id}/status`, { status: 'EM_PREPARO' }, 'COZ')).body.status, 'EM_PREPARO');
+  assert.equal((await post(`/api/pedidos/${id}/status`, { status: 'PRONTO_RETIRADA' }, 'COZ')).body.status, 'PRONTO_RETIRADA');
+  const fim = await post(`/api/pedidos/${id}/status`, { status: 'FINALIZADO' });
+  assert.equal(fim.status, 200);
+  assert.deepEqual(fim.body.historico.map((h) => h.para), ['RECEBIDO', 'EM_PREPARO', 'PRONTO_RETIRADA', 'FINALIZADO']);
+  assert.equal((await post(`/api/pedidos/${id}/reabrir`)).status, 409);
+  assert.equal(app.erros.length, 0);
+});
+
+test('reabrir e cancelar com motivo', async () => {
+  const p = await novo();
+  await post(`/api/pedidos/${p.id}/confirmar`);
+  assert.equal((await post(`/api/pedidos/${p.id}/reabrir`)).body.status, 'ABERTO');
+  assert.equal((await post(`/api/pedidos/${p.id}/cancelar`, {})).status, 400);
+  assert.equal((await post(`/api/pedidos/${p.id}/cancelar`, { motivo: 7 })).status, 400);
+  const c1 = await post(`/api/pedidos/${p.id}/cancelar`, { motivo: 'Desistiu' });
+  assert.equal(c1.body.status, 'CANCELADO');
+  assert.equal(c1.body.motivoCancelamento, 'Desistiu');
+  assert.equal((await post(`/api/pedidos/${p.id}/confirmar`)).status, 409);
+});
+
+test('confirmar sem cliente → 400; inexistente → 404; PUT em pedido confirmado → 409', async () => {
+  const sem = (await post('/api/pedidos', { itens: [item()] })).body;
+  const r = await post(`/api/pedidos/${sem.id}/confirmar`);
+  assert.equal(r.status, 400);
+  assert.ok(r.body.error);
+  assert.equal((await post('/api/pedidos/999/confirmar')).status, 404);
+  const p = await novo();
+  await post(`/api/pedidos/${p.id}/confirmar`);
+  assert.equal((await put(`/api/pedidos/${p.id}`, { observacao: 'x' })).status, 409);
+});
+
+test('bebida acima do estoque → 409 com a mensagem', async () => {
+  const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
+  const coca = s.bebidas.create(A, { nome: 'Coca-Cola', precoCents: 600, estoqueQtd: 3, estoqueMinimo: 0 });
+  const r = await post('/api/pedidos', { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [{ tipo: 'BEBIDA', itemId: coca.id, quantidade: 5 }] });
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /Coca-Cola \(saldo 3, pedido 5\)/);
+});
+
+test('fronteira: status inválido, ids ruins, corpo vazio/array, itens demais → 400', async () => {
+  const p = await novo();
+  for (const status of ['PAGO', 'ABERTO', 7, null, ['EM_PREPARO']]) {
+    assert.equal((await post(`/api/pedidos/${p.id}/status`, { status })).status, 400, String(status));
+  }
+  assert.equal((await post(`/api/pedidos/${p.id}/status`)).status, 400);
+  for (const id of ['abc', '0', '-1', '1.5', '1e3']) {
+    for (const rota of ['confirmar', 'reabrir', 'cancelar', 'status']) assert.equal((await post(`/api/pedidos/${id}/${rota}`, { motivo: 'x', status: 'EM_PREPARO' })).status, 400, `${id}/${rota}`);
+    assert.equal((await put(`/api/pedidos/${id}`, {})).status, 400, `PUT ${id}`);
+  }
+  assert.equal((await post('/api/pedidos', [])).status, 400);
+  assert.equal((await post('/api/pedidos', 'texto')).status, 400);
+  assert.equal((await post('/api/pedidos')).status, 400, 'corpo vazio sem itens');
+  assert.equal((await post('/api/pedidos', { itens: 'x' })).status, 400);
+  assert.equal((await post('/api/pedidos', { itens: Array.from({ length: 101 }, item) })).status, 400);
+  assert.equal((await put(`/api/pedidos/${p.id}`, [])).status, 400);
+  assert.equal(app.erros.length, 0);
+});
+
+test('nível C: 403 em tudo menos cozinha e status; B não muda para EM_PREPARO; A faz tudo', async () => {
+  const p = await novo();
+  assert.equal((await post('/api/pedidos', { itens: [item()] }, 'COZ')).status, 403);
+  assert.equal((await put(`/api/pedidos/${p.id}`, {}, 'COZ')).status, 403);
+  for (const rota of ['confirmar', 'reabrir', 'cancelar']) assert.equal((await post(`/api/pedidos/${p.id}/${rota}`, { motivo: 'x' }, 'COZ')).status, 403, rota);
+  assert.equal((await req('GET', '/api/pedidos', 'COZ')).status, 403);
+  await post(`/api/pedidos/${p.id}/confirmar`);
+  assert.equal((await post(`/api/pedidos/${p.id}/status`, { status: 'EM_PREPARO' }, 'ATEND')).status, 403);
+  assert.equal((await post(`/api/pedidos/${p.id}/status`, { status: 'EM_PREPARO' }, 'COZ')).status, 200);
+  const q = await novo();
+  assert.equal((await post(`/api/pedidos/${q.id}/confirmar`, undefined, 'ADM')).status, 200);
+  assert.equal((await post(`/api/pedidos/${q.id}/status`, { status: 'EM_PREPARO' }, 'ADM')).status, 200);
+  assert.equal((await post(`/api/pedidos/${q.id}/cancelar`, { motivo: 'teste' }, 'ADM')).status, 200);
 });

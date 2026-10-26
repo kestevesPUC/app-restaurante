@@ -32,30 +32,25 @@ Valores monetários em **centavos** (inteiros); datas `AAAA-MM-DD`; data/hora IS
 
 ## Pedidos
 
+Pedido da lanchonete: `ABERTO` (rascunho) → `RECEBIDO` → `EM_PREPARO` → `PRONTO_RETIRADA`/`PRONTO_ENTREGA` → `FINALIZADO`; `CANCELADO` com motivo. As escritas respondem 200 com o `Pedido` completo (itens e histórico). Erros: 400 (validação), 403 (nível), 404, 409 (transição inválida, estoque insuficiente). A autorização é decidida pelo serviço.
+
 | Método | Rota | Acesso | Descrição |
 | --- | --- | --- | --- |
-| GET | `/api/pedidos` | todos | filtros `de`, `ate`, `situacao`, `forma`, `mesaId`, `atendenteId`, `q`; **ordem por `id` crescente**; máx. 1000 |
-| GET | `/api/pedidos/:id` | todos | pedido com itens, modificações e pagamentos |
-| POST | `/api/pedidos` | todos | cria em aberto: `{tipo: "BALCAO"|"MESA", mesaId?, clienteNome?, observacao?, itens:[ItemInput]}`; 409 se a mesa já tiver comanda aberta |
-| PUT | `/api/pedidos/:id` | todos | substitui os itens **pendentes de envio** e a identificação (só `ABERTO`) |
-| POST | `/api/pedidos/:id/itens` | todos | acrescenta itens pendentes a uma comanda `{itens:[ItemInput]}` |
-| POST | `/api/pedidos/:id/enviar-cozinha` | todos | cria a próxima rodada com os itens pendentes (comanda de mesa) |
-| POST | `/api/pedidos/:id/itens/:itemId/cancelar` | todos | `{motivo}` cancela item já enviado |
-| POST | `/api/pedidos/:id/mover` | todos | `{mesaId}` troca a comanda de mesa (destino livre) |
-| POST | `/api/pedidos/:id/finalizar` | todos | balcão: finalizar · mesa: fechar conta. `ABERTO → AGUARDANDO_PAGAMENTO`; 409 se houver itens pendentes de envio na comanda; recalcula e devolve o total |
-| GET | `/api/mesas/:id/comanda` | todos | comanda aberta da mesa (404 se não houver) |
-| POST | `/api/pedidos/:id/reabrir` | todos | `AGUARDANDO_PAGAMENTO → ABERTO` (409 se houver pagamento pendente) |
-| POST | `/api/pedidos/:id/desconto` | A | `{descontoCents}` |
-| POST | `/api/pedidos/:id/cancelar` | todos* | `{motivo}` (*pedido pago: só A) |
-| GET | `/api/pedidos.csv` | todos | exportação com os mesmos filtros |
+| GET | `/api/pedidos` | A, B | filtros `de`, `ate` (AAAA-MM-DD válidos, `de <= ate`; padrão: hoje), `status`, `q` (nº, parte do nome sem distinguir acento/caixa, ou dígitos do telefone; até 80 caracteres; se repetido vale o último), `limite` (1–1000); **ordem por `id` crescente** |
+| GET | `/api/pedidos/:id` | A, B | pedido com itens e histórico |
+| POST | `/api/pedidos` | A, B | cria rascunho: `{cliente?: {nome, telefone}, itens: [ItemInput] (até 100), observacao?}` |
+| PUT | `/api/pedidos/:id` | A, B | atualiza o rascunho (só `ABERTO`; 409 nos demais) |
+| POST | `/api/pedidos/:id/confirmar` | A, B | `ABERTO → RECEBIDO`; exige cliente (nome e telefone) e itens; baixa o estoque das bebidas (409 se faltar saldo) |
+| POST | `/api/pedidos/:id/reabrir` | A, B | `RECEBIDO → ABERTO`; estorna o estoque |
+| POST | `/api/pedidos/:id/cancelar` | A, B | `{motivo}` (texto, até 200 caracteres) |
+| POST | `/api/pedidos/:id/status` | A, B, C | `{status: "EM_PREPARO"|"PRONTO_RETIRADA"|"PRONTO_ENTREGA"|"FINALIZADO"}`; quem pode cada mudança é decidido pelo serviço (403 se não puder) |
+| GET | `/api/pedidos.csv` | A, B | exportação com os mesmos filtros; colunas: Nº, Data (`dd/mm/aaaa`), Hora (`hh:mm`), Cliente, Telefone, Itens, Total (R$), Tempo estimado (min), Status |
 
 `ItemInput`:
 ```json
-{ "pratoId": 12, "quantidade": 1, "observacao": "bem passado",
-  "remover": [3, 7],
-  "adicionar": [{ "ingredienteId": 9, "quantidade": 2 }] }
+{ "tipo": "PRATO" | "BEBIDA", "itemId": 12, "quantidade": 1, "observacao": "sem cebola" }
 ```
-Preços enviados pela interface são ignorados; o servidor usa o cardápio atual e grava o retrato.
+Preços, totais e nomes enviados no corpo são ignorados; o servidor usa o cardápio atual. Corpo ausente ou que não seja um objeto JSON → 400. Ids de rota devem ser inteiros positivos (senão 400). Foram removidas as rotas de mesa/comanda (`itens`, `enviar-cozinha`, `mover`, `finalizar`, `desconto`, `itens/:id/cancelar`, `/api/mesas/:id/comanda`).
 
 ## Pagamentos
 
@@ -67,15 +62,14 @@ Preços enviados pela interface são ignorados; o servidor usa o cardápio atual
 | POST | `/api/pagamentos/:id/cancelar` | todos | cancela cobrança pendente (maquininha ou PIX) |
 | POST | `/api/pagamentos/:id/confirmar-pix` | todos | atendente confirma o recebimento do PIX |
 
-## Cozinha (andon)
+## Cozinha
 
 | Método | Rota | Acesso | Descrição |
 | --- | --- | --- | --- |
-| GET 🌐 | `/api/cozinha` | todos | rodadas com `vai_para_cozinha = 1` em `NA_FILA`, `EM_PREPARO`, `PRONTO` (+ canceladas nos últimos 60 s), ordenadas por `enviado_em`; com nº do pedido, mesa/cliente, rodada, itens (cancelados marcados), personalizações e observações, **sem preços** |
-| POST 🌐 | `/api/cozinha/envios/:id` | todos | `{acao: "iniciar"|"pronto"|"entregue"|"desfazer"}`; 409 se a transição não for válida |
-| GET | `/api/cozinha/endereco` | A, B | endereço e QR Code para abrir o andon no tablet |
+| GET | `/api/cozinha` | A, B, C | pedidos em `RECEBIDO`, `EM_PREPARO`, `PRONTO_RETIRADA` e `PRONTO_ENTREGA`, na ordem de confirmação |
+| POST | `/api/pedidos/:id/status` | A, B, C | muda o status operacional (ver Pedidos); a cozinha (C) só avança `RECEBIDO → EM_PREPARO → PRONTO_*` |
 
-O nível **C (Cozinha)** só acessa estas rotas, `/api/eventos` e as rotas de acesso (`/api/me`, `/api/logout`). Login, logout, `/api/me` e `/api/eventos` também são 🌐.
+O nível **C (Cozinha)** só acessa estas rotas, `/api/eventos` e as rotas de acesso (`/api/me`, `/api/logout`).
 
 ## Terminal (Moderninha Smart) 🌐
 

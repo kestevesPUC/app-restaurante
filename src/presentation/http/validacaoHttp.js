@@ -3,6 +3,8 @@ const ValidationError = require('../../domain/errors/ValidationError');
 
 const { STATUS } = require('../../domain/pedido/status');
 
+const Q_MAX = 80;
+
 /** Inteiro positivo vindo de rota ou query (texto); nunca devolve NaN. */
 function idPositivo(valor, rotulo = 'O identificador') {
   const texto = String(valor ?? '');
@@ -22,7 +24,7 @@ function dataIso(valor, rotulo) {
   return texto;
 }
 
-/** Filtros de listagem de pedidos (query string): de, ate, status, q, limite (1–1000). */
+/** Filtros de listagem de pedidos (query string): de, ate (de <= ate), status, q (até 80 caracteres; repetido vale o último), limite (1–1000). */
 function filtrosDePedidos(query = {}) {
   const filtros = {};
   if (query.de !== undefined) filtros.de = dataIso(query.de, 'A data inicial');
@@ -35,7 +37,11 @@ function filtrosDePedidos(query = {}) {
     filtros.limite = idPositivo(query.limite, 'O limite');
     if (filtros.limite > 1000) throw new ValidationError('O limite deve ser um inteiro entre 1 e 1000');
   }
-  if (typeof query.q === 'string' && query.q.trim()) filtros.q = query.q;
+  if (typeof query.q === 'string' && query.q.trim()) {
+    if ([...query.q].length > Q_MAX) throw new ValidationError(`A busca deve ter no máximo ${Q_MAX} caracteres`);
+    filtros.q = query.q;
+  }
+  if (filtros.de && filtros.ate && filtros.de > filtros.ate) throw new ValidationError('A data inicial não pode ser posterior à data final');
   return filtros;
 }
 
