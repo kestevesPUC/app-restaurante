@@ -92,4 +92,46 @@ module.exports = [
       `);
     },
   },
+  {
+    version: 3,
+    up(db) {
+      db.exec(`
+        CREATE TABLE mesas (
+          id INTEGER PRIMARY KEY,
+          numero TEXT NOT NULL,
+          numero_norm TEXT NOT NULL UNIQUE,
+          capacidade INTEGER NOT NULL CHECK (capacidade >= 1),
+          situacao TEXT NOT NULL DEFAULT 'LIVRE' CHECK (situacao IN ('LIVRE','OCUPADA','RESERVADA')),
+          ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1))
+        );
+
+        CREATE TABLE fila_espera (
+          id INTEGER PRIMARY KEY,
+          cliente_nome TEXT NOT NULL,
+          telefone TEXT,
+          pessoas INTEGER NOT NULL CHECK (pessoas >= 1),
+          observacao TEXT,
+          situacao TEXT NOT NULL DEFAULT 'AGUARDANDO' CHECK (situacao IN ('AGUARDANDO','CHAMADO','SENTADO','DESISTIU','NAO_COMPARECEU')),
+          mesa_id INTEGER REFERENCES mesas(id) ON DELETE RESTRICT,
+          entrou_em TEXT NOT NULL,
+          chamado_em TEXT,
+          encerrado_em TEXT
+        );
+        CREATE INDEX ix_fila_situacao ON fila_espera(situacao, entrou_em);
+        CREATE INDEX ix_fila_mesa ON fila_espera(mesa_id);
+
+        CREATE TABLE mensagens_whatsapp (
+          id INTEGER PRIMARY KEY,
+          fila_id INTEGER NOT NULL REFERENCES fila_espera(id) ON DELETE CASCADE,
+          telefone TEXT NOT NULL,
+          texto TEXT NOT NULL,
+          situacao TEXT NOT NULL CHECK (situacao IN ('ENVIADA','FALHOU')),
+          erro TEXT,
+          enviada_em TEXT NOT NULL,
+          enviada_por INTEGER REFERENCES usuarios(id)
+        );
+        CREATE INDEX ix_mensagens_fila ON mensagens_whatsapp(fila_id);
+      `);
+    },
+  },
 ];

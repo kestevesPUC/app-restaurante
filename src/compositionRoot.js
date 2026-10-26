@@ -9,6 +9,7 @@ const ConfiguracaoRepository = require('./infrastructure/repositories/Configurac
 const CategoriaRepository = require('./infrastructure/repositories/CategoriaRepository');
 const IngredienteRepository = require('./infrastructure/repositories/IngredienteRepository');
 const PratoRepository = require('./infrastructure/repositories/PratoRepository');
+const MesaRepository = require('./infrastructure/repositories/MesaRepository');
 const PasswordHasher = require('./infrastructure/security/PasswordHasher');
 const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
@@ -21,6 +22,7 @@ const AdminBootstrap = require('./application/AdminBootstrap');
 const ConfigService = require('./application/ConfigService');
 const CadastroService = require('./application/CadastroService');
 const PratoService = require('./application/PratoService');
+const MesaService = require('./application/MesaService');
 const FotoValidator = require('./domain/validation/FotoValidator');
 const { validarCategoria, validarIngrediente } = require('./domain/cardapio/validators');
 
@@ -29,6 +31,7 @@ const HttpServer = require('./presentation/http/HttpServer');
 const StaticFileHandler = require('./presentation/http/StaticFileHandler');
 const CadastroController = require('./presentation/http/controllers/CadastroController');
 const PratoController = require('./presentation/http/controllers/PratoController');
+const MesaController = require('./presentation/http/controllers/MesaController');
 const CardapioController = require('./presentation/http/controllers/CardapioController');
 const AuthController =require('./presentation/http/controllers/AuthController');
 const UsuarioController = require('./presentation/http/controllers/UsuarioController');
@@ -58,6 +61,7 @@ function buildApplication({
     categorias: new CategoriaRepository(db),
     ingredientes: new IngredienteRepository(db),
     pratos: new PratoRepository(db),
+    mesas: new MesaRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -77,6 +81,8 @@ function buildApplication({
     pratos: new PratoService({
       repository: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, fotoValidator: new FotoValidator(), audit,
     }),
+    // A Tarefa 11 liga `comandaNaoPagaDaMesa` ao repositório de pedidos.
+    mesas: new MesaService({ repository: repositories.mesas, audit, bus }),
     adminBootstrap: new AdminBootstrap({ usuarios: repositories.usuarios, hasher, audit, clock }),
   };
 
@@ -87,6 +93,7 @@ function buildApplication({
   new CadastroController('ingredientes', services.ingredientes).register(router);
   new PratoController(services.pratos).register(router);
   new CardapioController(services.pratos).register(router);
+  new MesaController(services.mesas).register(router);
   new AuditController(repositories.auditoria).register(router);
   new EventController(bus, { heartbeatMs }).register(router);
 
