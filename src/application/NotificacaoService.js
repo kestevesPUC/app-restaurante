@@ -98,7 +98,7 @@ class NotificacaoService {
   /** Envia, grava a linha e publica o evento. Devolve a linha gravada ou null se nem isso foi possível. Nunca lança. */
   async #enviar(pedido, tipo, { automatica, user }) {
     try {
-      const telefone = typeof pedido.cliente?.telefone === 'string' ? pedido.cliente.telefone : '';
+      const telefone = typeof pedido.cliente?.telefone === 'string' ? pedido.cliente.telefone.trim() : '';
       const texto = this.renderizar(this.config.get(CHAVE_MODELO[tipo]), { nome: pedido.cliente?.nome, numero: pedido.id });
       let situacao = 'ENVIADA';
       let erro = null;

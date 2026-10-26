@@ -202,10 +202,13 @@ test('pedido sem cliente ou sem telefone: FALHOU visível, sem chamar o mensagei
   s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
   await s.notificacoes.aguardarPendentes();
   app.mensageiro.enviadas.length = 0;
-  for (const cliente of [null, { id: 1, nome: 'Ana', telefone: null }]) {
+  for (const cliente of [null, { id: 1, nome: 'Ana', telefone: null }, { id: 1, nome: 'Ana', telefone: '   ' }, { id: 1, nome: 'Ana', telefone: '' }]) {
     eventos.length = 0;
     const pedidoFalso = { id: p.id, status: 'PRONTO_RETIRADA', cliente };
-    const svc = new NotificacaoService({ ...s.notificacoes, carregarPedido: () => pedidoFalso });
+    const svc = new NotificacaoService({
+      repository: app.app.repositories.notificacoes, mensageiro: app.mensageiro, carregarPedido: () => pedidoFalso,
+      config: s.config, audit: app.app.services.audit, bus: app.bus, relogio: Date.now, logger: { error() {} },
+    });
     svc.aoMudarStatus(pedidoFalso, B);
     await svc.aguardarPendentes();
     await new Promise((r) => setImmediate(r));
@@ -232,4 +235,30 @@ test('bus.publish lançando após o INSERT não derruba o reenviar', async () =>
   s.notificacoes.bus = original;
   assert.equal(r.situacao, 'ENVIADA');
   assert.equal(linhas(p.id).length, 2);
+});
+
+test('envio real com primeiro nome $& ou $1 preserva o texto exatamente', async () => {
+  for (const [nome, primeiro] of [['$& Silva', '$&'], ['$1 Souza', '$1']]) {
+    app.mensageiro.enviadas.length = 0;
+    const p = emPreparo(nome);
+    s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+    await s.notificacoes.aguardarPendentes();
+    assert.equal(app.mensageiro.enviadas[0].texto, `Olá, ${primeiro}!
+
+Seu pedido nº ${p.id} está pronto para retirada.
+
+Agradecemos a preferência.`);
+  }
+});
+
+test('telefone mal formatado é problema do adaptador: o FALHOU fica registrado', async () => {
+  await app.close();
+  const recusa = { estado: () => 'CONECTADO', enviar: async () => { throw new MensageiroError('NUMERO_SEM_WHATSAPP'); } };
+  await subir({ mensageiro: recusa });
+  const p = emPreparo();
+  app.db.prepare("UPDATE pedidos SET cliente_telefone = 'abc' WHERE id = ?").run(p.id);
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  assert.equal(linhas(p.id)[0].situacao, 'FALHOU');
+  assert.equal(linhas(p.id)[0].telefone, 'abc');
 });
