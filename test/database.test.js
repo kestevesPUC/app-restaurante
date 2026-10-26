@@ -11,11 +11,11 @@ const novoUsuario = (db, usuario, nivel = 'A') =>
     "INSERT INTO usuarios (usuario, nome, nivel, senha_hash, criado_em) VALUES (?, 'Nome', ?, 'x', '2026-10-23T00:00:00.000Z')"
   ).run(usuario, nivel);
 
-test('aplica a migração 1 e grava user_version = 1', () => {
+test('aplica as migrações e grava user_version = 2', () => {
   const db = new SqliteDatabase(':memory:');
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 2);
   const tabelas = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((t) => t.name);
-  for (const t of ['usuarios', 'configuracoes', 'auditoria']) assert.ok(tabelas.includes(t), t);
+  for (const t of ['usuarios', 'configuracoes', 'auditoria', 'categorias', 'ingredientes', 'pratos', 'prato_ingredientes']) assert.ok(tabelas.includes(t), t);
   db.close();
 });
 

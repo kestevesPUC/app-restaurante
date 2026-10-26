@@ -6,6 +6,8 @@ const SqliteDatabase = require('./infrastructure/database/SqliteDatabase');
 const UsuarioRepository = require('./infrastructure/repositories/UsuarioRepository');
 const AuditRepository = require('./infrastructure/repositories/AuditRepository');
 const ConfiguracaoRepository = require('./infrastructure/repositories/ConfiguracaoRepository');
+const CategoriaRepository = require('./infrastructure/repositories/CategoriaRepository');
+const IngredienteRepository = require('./infrastructure/repositories/IngredienteRepository');
 const PasswordHasher = require('./infrastructure/security/PasswordHasher');
 const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
@@ -16,11 +18,14 @@ const AuthService = require('./application/AuthService');
 const UsuarioService = require('./application/UsuarioService');
 const AdminBootstrap = require('./application/AdminBootstrap');
 const ConfigService = require('./application/ConfigService');
+const CadastroService = require('./application/CadastroService');
+const { validarCategoria, validarIngrediente } = require('./domain/cardapio/validators');
 
 const Router = require('./presentation/http/Router');
 const HttpServer = require('./presentation/http/HttpServer');
 const StaticFileHandler = require('./presentation/http/StaticFileHandler');
-const AuthController = require('./presentation/http/controllers/AuthController');
+const CadastroController = require('./presentation/http/controllers/CadastroController');
+const AuthController =require('./presentation/http/controllers/AuthController');
 const UsuarioController = require('./presentation/http/controllers/UsuarioController');
 const AuditController = require('./presentation/http/controllers/AuditController');
 const EventController = require('./presentation/http/controllers/EventController');
@@ -45,6 +50,8 @@ function buildApplication({
     usuarios: new UsuarioRepository(db),
     auditoria: new AuditRepository(db),
     configuracoes: new ConfiguracaoRepository(db),
+    categorias: new CategoriaRepository(db),
+    ingredientes: new IngredienteRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -58,12 +65,16 @@ function buildApplication({
     auth: new AuthService({ usuarios: repositories.usuarios, hasher, sessions, throttle, audit }),
     usuarios: new UsuarioService({ usuarios: repositories.usuarios, hasher, audit, sessions, clock }),
     config: new ConfigService({ repository: repositories.configuracoes, audit }),
+    categorias: new CadastroService({ entity: 'categoria', repository: repositories.categorias, validate: validarCategoria, audit }),
+    ingredientes: new CadastroService({ entity: 'ingrediente', repository: repositories.ingredientes, validate: validarIngrediente, audit }),
     adminBootstrap: new AdminBootstrap({ usuarios: repositories.usuarios, hasher, audit, clock }),
   };
 
   const router = new Router();
   new AuthController(services.auth).register(router);
   new UsuarioController(services.usuarios).register(router);
+  new CadastroController('categorias', services.categorias).register(router);
+  new CadastroController('ingredientes', services.ingredientes).register(router);
   new AuditController(repositories.auditoria).register(router);
   new EventController(bus, { heartbeatMs }).register(router);
 
