@@ -13,6 +13,7 @@ const MesaRepository = require('./infrastructure/repositories/MesaRepository');
 const PedidoRepository = require('./infrastructure/repositories/PedidoRepository');
 const BebidaRepository = require('./infrastructure/repositories/BebidaRepository');
 const MovimentacaoRepository = require('./infrastructure/repositories/MovimentacaoRepository');
+const ClienteRepository = require('./infrastructure/repositories/ClienteRepository');
 const PasswordHasher = require('./infrastructure/security/PasswordHasher');
 const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
@@ -28,6 +29,7 @@ const PratoService = require('./application/PratoService');
 const MesaService = require('./application/MesaService');
 const BebidaService = require('./application/BebidaService');
 const EstoqueService = require('./application/EstoqueService');
+const ClienteService = require('./application/ClienteService');
 const PedidoService = require('./application/PedidoService');
 const MontadorDeItens = require('./application/MontadorDeItens');
 const FotoValidator = require('./domain/validation/FotoValidator');
@@ -75,6 +77,7 @@ function buildApplication({
     pedidos: new PedidoRepository(db),
     bebidas: new BebidaRepository(db),
     movimentacoes: new MovimentacaoRepository(db),
+    clientes: new ClienteRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -101,6 +104,7 @@ function buildApplication({
   };
   services.bebidas = new BebidaService({ db, repository: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.estoque = new EstoqueService({ db, bebidas: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
+  services.clientes = new ClienteService({ repository: repositories.clientes, audit, clock });
   services.pedidos = new PedidoService({
     db, repository: repositories.pedidos, mesaRepository: repositories.mesas, mesas: services.mesas, config: services.config, audit, bus, relogio,
     montador: new MontadorDeItens({ pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes }),
