@@ -8,7 +8,6 @@ const FileResponse = require('./FileResponse');
 const { readJsonBody, parseCookies } = require('./requestParsing');
 
 const SESSION_COOKIE = 'sid';
-const COOKIE_MAX_AGE = 12 * 60 * 60;
 
 /** Servidor HTTP: autenticação, autorização por nível, contexto da requisição e tradução de erros. */
 class HttpServer {
@@ -66,7 +65,7 @@ class HttpServer {
         params: match.params,
         query: Object.fromEntries(url.searchParams),
         body: ['GET', 'DELETE'].includes(req.method) ? {} : await readJsonBody(req),
-        setCookie: (value, maxAge = COOKIE_MAX_AGE) => {
+        setCookie: (value, maxAge) => {
           headers['Set-Cookie'] = `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
         },
       };

@@ -16,7 +16,7 @@ class AuthController {
 
   #login(ctx) {
     const { sid, user } = this.authService.login(ctx.body.usuario, ctx.body.senha);
-    ctx.setCookie(sid);
+    ctx.setCookie(sid, this.authService.cookieMaxAge(user.nivel));
     return user;
   }
 
@@ -29,7 +29,7 @@ class AuthController {
   /** A troca encerra todas as sessões do usuário; abre uma nova e reemite o cookie. */
   #trocarSenha(ctx) {
     this.authService.trocarSenha(ctx.user, ctx.body.atual, ctx.body.nova);
-    ctx.setCookie(this.authService.abrirSessao(ctx.user));
+    ctx.setCookie(this.authService.abrirSessao(ctx.user), this.authService.cookieMaxAge(ctx.user.nivel));
     return { ok: true };
   }
 }

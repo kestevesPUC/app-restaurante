@@ -6,6 +6,7 @@ const { usuarioPublico } = require('../domain/usuarioPublico');
 const AuditTrail = require('./AuditTrail');
 
 const SENHA_MINIMA = 6;
+const DEZ_ANOS_S = 10 * 365 * 24 * 60 * 60;
 const chaveSenha = (user) => `senha:${user.id}`;
 
 /** Autenticação (RN-01): login com bloqueio por tentativas, sessões e troca de senha. Tudo é auditado. */
@@ -50,6 +51,12 @@ class AuthService {
   /** Abre sessão para um usuário já autenticado (uso interno, ex.: após a troca de senha). Não confere senha. */
   abrirSessao(user) {
     return this.sessions.create(user.id, user.nivel);
+  }
+
+  /** Duração do cookie de sessão em segundos, derivada do mesmo TTL do SessionStore (nível sem TTL = ~10 anos). */
+  cookieMaxAge(nivel) {
+    const ttl = this.sessions.ttlPorNivel[nivel] ?? null;
+    return ttl === null ? DEZ_ANOS_S : Math.floor(ttl / 1000);
   }
 
   logout(sid) {

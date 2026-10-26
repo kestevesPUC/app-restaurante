@@ -52,6 +52,15 @@ test('POST /api/login correto define cookie sid HttpOnly e SameSite=Strict', asy
   assert.match(setCookie, /SameSite=Strict/);
 });
 
+test('cookie sid dura 12 h para A/B e ~10 anos para C (mesmo TTL do SessionStore)', async () => {
+  const maxAge = async (u) => Number(/Max-Age=(\d+)/.exec((await app.login(u)).headers.get('set-cookie'))[1]);
+  assert.equal(await maxAge('ADM'), 12 * 3600);
+  assert.equal(await maxAge('ATEND'), 12 * 3600);
+  assert.equal(await maxAge('COZ'), 10 * 365 * 24 * 3600);
+  const troca = await app.request('POST', '/api/me/senha', { cookie: (await app.login('PROV')).cookie, body: { atual: SENHAS.PROV, nova: 'outraSenha1' } });
+  assert.match(troca.headers.get('set-cookie'), /Max-Age=43200/);
+});
+
 test('login com senha errada → 401 e logout invalida o cookie', async () => {
   assert.equal((await app.login('ADM', 'errada')).status, 401);
   const { cookie } = await app.login('ADM', SENHAS.ADM);
