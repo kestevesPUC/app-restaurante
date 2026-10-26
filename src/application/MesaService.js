@@ -54,26 +54,31 @@ class MesaService {
     return { ok: true };
   }
 
-  /** LIVRE ou RESERVADA → OCUPADA. */
-  ocupar(user, id) {
+  /**
+   * LIVRE ou RESERVADA → OCUPADA.
+   * `eventos`: se informado, o evento `mesa` é acrescentado a esta lista em vez de publicado (quem chama publica após o commit).
+   */
+  ocupar(user, id, { eventos = null } = {}) {
     const antes = this.#exigir(id);
     if (!antes.ativo) throw new ConflictError('Mesa inativa não pode ser ocupada');
     if (antes.situacao === 'OCUPADA') throw new ConflictError('A mesa já está ocupada');
-    return this.#mudarSituacao(user, antes, 'OCUPADA', 'ocupar', 'ocupada');
+    return this.#mudarSituacao(user, antes, 'OCUPADA', 'ocupar', 'ocupada', eventos);
   }
 
   /** → LIVRE, desde que não haja comanda em aberto. `sugestaoFila` é preenchida na Parte 2. */
-  liberar(user, id) {
+  liberar(user, id, { eventos = null } = {}) {
     const antes = this.#exigir(id);
     if (this.comandaNaoPagaDaMesa(antes.id)) throw new ConflictError('Mesa com conta em aberto');
-    const mesa = this.#mudarSituacao(user, antes, 'LIVRE', 'liberar', 'liberada');
+    const mesa = this.#mudarSituacao(user, antes, 'LIVRE', 'liberar', 'liberada', eventos);
     return { mesa, sugestaoFila: null };
   }
 
-  #mudarSituacao(user, antes, situacao, acao, verbo) {
+  #mudarSituacao(user, antes, situacao, acao, verbo, eventos = null) {
     const depois = this.repository.setSituacao(antes.id, situacao);
     this.#log(user, acao, depois, verbo, antes, depois);
-    this.bus?.publish('mesa', { id: depois.id, situacao: depois.situacao });
+    const evento = { id: depois.id, situacao: depois.situacao };
+    if (eventos) eventos.push(evento);
+    else this.bus?.publish('mesa', evento);
     return depois;
   }
 

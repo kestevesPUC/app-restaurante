@@ -307,3 +307,67 @@ test('listar por id crescente, filtra por dia, situação e busca sem acento', (
   assert.deepEqual(l.pagamentos, []);
   assert.deepEqual(s.pedidos.obter(a.id).pagamentos, []);
 });
+
+test('nível C (cozinha) ou usuário sem nível não escreve pedidos → 403; B não cancela PAGO', () => {
+  const c = cardapio();
+  const C = app.db.prepare("SELECT id, usuario, nivel FROM usuarios WHERE usuario = 'COZ'").get();
+  const m = mesa('1'); const m2 = mesa('2');
+  const p = balcao(c);
+  const comanda = s.pedidos.criar(B, { tipo: 'MESA', mesaId: m.id, itens: [it(c.burger)] });
+  s.pedidos.enviarCozinha(B, comanda.id);
+  const fin = balcao(c); s.pedidos.finalizar(B, fin.id);
+  for (const u of [C, { id: C.id, usuario: 'x' }]) {
+    const chamadas = [
+      () => s.pedidos.criar(u, { tipo: 'BALCAO', clienteNome: 'Ana', itens: [it(c.burger)] }),
+      () => s.pedidos.adicionarItens(u, p.id, [it(c.suco)]),
+      () => s.pedidos.substituirPendentes(u, p.id, { itens: [] }),
+      () => s.pedidos.enviarCozinha(u, p.id),
+      () => s.pedidos.cancelarItem(u, comanda.id, comanda.itens[0].id, 'x'),
+      () => s.pedidos.mover(u, comanda.id, m2.id),
+      () => s.pedidos.finalizar(u, p.id),
+      () => s.pedidos.reabrir(u, fin.id),
+      () => s.pedidos.cancelar(u, p.id, 'x'),
+      () => s.pedidos.aplicarDesconto(u, p.id, 1),
+    ];
+    for (const fn of chamadas) assert.equal(status(fn), 403);
+  }
+  app.db.prepare("UPDATE pedidos SET situacao = 'PAGO' WHERE id = ?").run(fin.id);
+  assert.equal(status(() => s.pedidos.cancelar(B, fin.id, 'x')), 403);
+  assert.equal(s.pedidos.obter(p.id).itens.length, 1);
+});
+
+test('falha depois de ocupar/liberar a mesa: rollback e nenhum evento mesa/pedido sai', () => {
+  const todos = [];
+  app.bus.subscribe((e) => todos.push(e.tipo));
+  const m1 = mesa('1'); const m2 = mesa('2');
+  const p = s.pedidos.criar(B, { tipo: 'MESA', mesaId: m1.id, itens: [] });
+  todos.length = 0;
+  const original = s.audit.record.bind(s.audit);
+  s.audit.record = (e) => { if (e.entidade === 'pedido') throw new Error('falha'); return original(e); };
+  assert.throws(() => s.pedidos.criar(B, { tipo: 'MESA', mesaId: m2.id, itens: [] }), /falha/);
+  assert.throws(() => s.pedidos.mover(B, p.id, m2.id), /falha/);
+  s.audit.record = original;
+  assert.deepEqual(todos, []);
+  const mesas = app.app.repositories.mesas;
+  assert.equal(mesas.findById(m1.id).situacao, 'OCUPADA');
+  assert.equal(mesas.findById(m2.id).situacao, 'LIVRE');
+  assert.equal(s.pedidos.obter(p.id).mesaId, m1.id);
+  assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM pedidos').get().n, 1);
+  s.pedidos.mover(B, p.id, m2.id);
+  assert.deepEqual(todos, ['mesa', 'mesa', 'pedido']);
+});
+
+test('auditoria registra cancelar_item, finalizar, reabrir, mover e desconto com ator e entidade', () => {
+  const c = cardapio();
+  const m1 = mesa('1'); const m2 = mesa('2');
+  const p = s.pedidos.criar(B, { tipo: 'MESA', mesaId: m1.id, itens: [it(c.burger), it(c.suco)] });
+  s.pedidos.enviarCozinha(B, p.id);
+  s.pedidos.cancelarItem(B, p.id, p.itens[0].id, 'erro');
+  s.pedidos.mover(B, p.id, m2.id);
+  s.pedidos.aplicarDesconto(A, p.id, 100);
+  s.pedidos.finalizar(B, p.id);
+  s.pedidos.reabrir(B, p.id);
+  const linhas = app.db.prepare("SELECT acao, usuario, usuario_id, entidade FROM auditoria WHERE entidade = 'pedido' AND entidade_id = ? ORDER BY id").all(p.id);
+  const esperado = [['criar', B], ['enviar', B], ['cancelar_item', B], ['mover', B], ['desconto', A], ['finalizar', B], ['reabrir', B]];
+  assert.deepEqual(linhas.map((l) => [l.acao, l.usuario, l.usuario_id, l.entidade]), esperado.map(([a, u]) => [a, u.usuario, u.id, 'pedido']));
+});

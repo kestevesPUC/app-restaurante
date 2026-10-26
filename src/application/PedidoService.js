@@ -8,6 +8,7 @@ const { calcularPedido, centavos } = require('../domain/pedido/calculos');
 const { podeTransitar } = require('../domain/pedido/situacoes');
 
 const MOTIVO_MAX = 200;
+const NIVEIS_PEDIDO = ['A', 'B'];
 const NAO_PAGOS = ['ABERTO', 'AGUARDANDO_PAGAMENTO'];
 
 const ehComandaDuplicada = (error) => /UNIQUE/i.test(error?.message || '') && /pedidos\.mesa_id/i.test(error?.message || '');
@@ -54,10 +55,11 @@ class PedidoService {
   }
 
   criar(user, body = {}) {
+    this.#exigirAtendente(user);
     const ident = validarIdentificacao(body);
     const observacao = observacaoDe(body.observacao);
     const itens = this.montador.montar(body.itens);
-    const id = this.#escrever(() => {
+    const { resultado: id, eventosMesa } = this.#escreverComMesas((eventos) => {
       if (ident.tipo === 'MESA') this.#exigirMesaDisponivel(ident.mesaId);
       const agora = this.relogio();
       const dataLocal = dataLocalDe(agora);
@@ -66,15 +68,16 @@ class PedidoService {
       });
       this.#inserirItens(pedidoId, itens);
       this.#recalcular(pedidoId);
-      if (ident.tipo === 'MESA') this.#ocuparSeNecessario(user, ident.mesaId);
+      if (ident.tipo === 'MESA') this.#ocuparSeNecessario(user, ident.mesaId, eventos);
       const criado = this.repository.findById(pedidoId);
       this.#log(user, 'criar', criado, 'criado', null, criado);
       return pedidoId;
     });
-    return this.#publicar(id);
+    return this.#publicar(id, eventosMesa);
   }
 
   adicionarItens(user, pedidoId, entradas) {
+    this.#exigirAtendente(user);
     const itens = this.montador.montar(entradas, { exigirAoMenosUm: true });
     this.#escrever(() => {
       const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
@@ -86,8 +89,9 @@ class PedidoService {
   }
 
   substituirPendentes(user, pedidoId, body = {}) {
+    this.#exigirAtendente(user);
     const itens = this.montador.montar(body.itens);
-    this.#escrever(() => {
+    const { eventosMesa } = this.#escreverComMesas((eventos) => {
       const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
       const campos = {};
       if (body.observacao !== undefined) campos.observacao = observacaoDe(body.observacao);
@@ -96,7 +100,7 @@ class PedidoService {
           tipo: antes.tipo, mesaId: body.mesaId ?? antes.mesaId, clienteNome: body.clienteNome !== undefined ? body.clienteNome : antes.clienteNome,
         });
         campos.clienteNome = ident.clienteNome;
-        if (antes.tipo === 'MESA' && ident.mesaId !== antes.mesaId) this.#moverComanda(user, antes, ident.mesaId);
+        if (antes.tipo === 'MESA' && ident.mesaId !== antes.mesaId) this.#moverComanda(user, antes, ident.mesaId, eventos);
       }
       this.repository.update(antes.id, campos);
       this.repository.removerPendentes(antes.id);
@@ -104,10 +108,11 @@ class PedidoService {
       this.#recalcular(antes.id);
       this.#log(user, 'alterar', antes, 'alterado', antes, this.repository.findById(antes.id));
     });
-    return this.#publicar(pedidoId);
+    return this.#publicar(pedidoId, eventosMesa);
   }
 
   enviarCozinha(user, pedidoId) {
+    this.#exigirAtendente(user);
     const envio = this.#escrever(() => {
       const pedido = this.#exigirSituacao(pedidoId, ['ABERTO']);
       return this.#enviar(user, pedido);
@@ -117,6 +122,7 @@ class PedidoService {
   }
 
   cancelarItem(user, pedidoId, itemId, motivo) {
+    this.#exigirAtendente(user);
     const texto = motivoDe(motivo);
     this.#escrever(() => {
       const antes = this.#exigirSituacao(pedidoId, NAO_PAGOS);
@@ -135,17 +141,19 @@ class PedidoService {
   }
 
   mover(user, pedidoId, mesaId) {
-    this.#escrever(() => {
+    this.#exigirAtendente(user);
+    const { eventosMesa } = this.#escreverComMesas((eventos) => {
       const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
       if (antes.tipo !== 'MESA') throw new ConflictError('Só comandas de mesa podem ser movidas');
       const destino = validarIdentificacao({ tipo: 'MESA', mesaId }).mesaId;
       if (destino === antes.mesaId) return;
-      this.#moverComanda(user, antes, destino);
+      this.#moverComanda(user, antes, destino, eventos);
     });
-    return this.#publicar(pedidoId);
+    return this.#publicar(pedidoId, eventosMesa);
   }
 
   finalizar(user, pedidoId) {
+    this.#exigirAtendente(user);
     this.#escrever(() => {
       const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
       const itens = this.repository.itens(antes.id);
@@ -161,6 +169,7 @@ class PedidoService {
   }
 
   reabrir(user, pedidoId) {
+    this.#exigirAtendente(user);
     this.#escrever(() => {
       const antes = this.#exigirSituacao(pedidoId, ['AGUARDANDO_PAGAMENTO']);
       if (this.temPagamentoPendente(antes.id)) throw new ConflictError('Há um pagamento em andamento para este pedido');
@@ -171,10 +180,11 @@ class PedidoService {
   }
 
   cancelar(user, pedidoId, motivo) {
+    this.#exigirAtendente(user);
     const texto = motivoDe(motivo);
     this.#escrever(() => {
       const antes = this.#exigir(pedidoId);
-      if (antes.situacao === 'PAGO' && user.nivel !== 'A') throw new ForbiddenError('Só o nível A pode cancelar um pedido pago');
+      if (antes.situacao === 'PAGO' && user?.nivel !== 'A') throw new ForbiddenError('Só o nível A pode cancelar um pedido pago');
       if (!podeTransitar(antes.situacao, 'CANCELADO')) throw new ConflictError('Este pedido não pode ser cancelado');
       this.repository.update(antes.id, { situacao: 'CANCELADO', canceladoEm: this.#agoraIso(), canceladoPor: user.id, motivoCancelamento: texto });
       this.#log(user, 'cancelar', antes, `cancelado: ${texto}`, antes, this.repository.findById(antes.id));
@@ -183,7 +193,7 @@ class PedidoService {
   }
 
   aplicarDesconto(user, pedidoId, descontoCents) {
-    if (user.nivel !== 'A') throw new ForbiddenError('Só o nível A pode aplicar desconto');
+    if (user?.nivel !== 'A') throw new ForbiddenError('Só o nível A pode aplicar desconto');
     centavos(descontoCents, 'O desconto');
     this.#escrever(() => {
       const antes = this.#exigirSituacao(pedidoId, NAO_PAGOS);
@@ -219,7 +229,7 @@ class PedidoService {
   }
 
   /** Atualiza `mesa_id` primeiro, ocupa a nova e só então libera a antiga. */
-  #moverComanda(user, antes, destinoId) {
+  #moverComanda(user, antes, destinoId, eventos) {
     this.#exigirMesaDisponivel(destinoId);
     try {
       this.repository.update(antes.id, { mesaId: destinoId });
@@ -227,8 +237,8 @@ class PedidoService {
       if (ehComandaDuplicada(error)) throw new ConflictError('A mesa de destino já tem comanda aberta');
       throw error;
     }
-    this.#ocuparSeNecessario(user, destinoId);
-    this.mesas.liberar(user, antes.mesaId);
+    this.#ocuparSeNecessario(user, destinoId, eventos);
+    this.mesas.liberar(user, antes.mesaId, { eventos });
     this.#log(user, 'mover', antes, `movido para outra mesa`, antes, this.repository.findById(antes.id));
   }
 
@@ -241,8 +251,20 @@ class PedidoService {
   }
 
   /** Mesa ocupada à mão (sem comanda) é aceita como está. */
-  #ocuparSeNecessario(user, mesaId) {
-    if (this.mesaRepository.findById(mesaId).situacao !== 'OCUPADA') this.mesas.ocupar(user, mesaId);
+  #ocuparSeNecessario(user, mesaId, eventos) {
+    if (this.mesaRepository.findById(mesaId).situacao !== 'OCUPADA') this.mesas.ocupar(user, mesaId, { eventos });
+  }
+
+  /** Só níveis A e B escrevem pedidos (a cozinha, nível C, não). */
+  #exigirAtendente(user) {
+    if (!NIVEIS_PEDIDO.includes(user?.nivel)) throw new ForbiddenError('Sem permissão para alterar pedidos');
+  }
+
+  /** Executa na transação coletando os eventos `mesa`, que só são publicados depois do commit. */
+  #escreverComMesas(work) {
+    const eventos = [];
+    const resultado = this.#escrever(() => work(eventos));
+    return { resultado, eventosMesa: eventos };
   }
 
   #inserirItens(pedidoId, itens) {
@@ -269,7 +291,8 @@ class PedidoService {
     }
   }
 
-  #publicar(pedidoId) {
+  #publicar(pedidoId, eventosMesa = []) {
+    for (const evento of eventosMesa) this.bus?.publish('mesa', evento);
     const pedido = this.obter(pedidoId);
     this.bus?.publish('pedido', { id: pedido.id, situacao: pedido.situacao });
     return pedido;
