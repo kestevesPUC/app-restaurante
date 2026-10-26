@@ -1,8 +1,21 @@
 'use strict';
 const ValidationError = require('../errors/ValidationError');
-const { exigirObjeto, inteiro } = require('./bebidaValidator');
 
 const MOTIVO_MAX = 200;
+const ESTOQUE_MAXIMO = 1_000_000;
+const MENSAGEM_MAXIMO = 'Estoque máximo de 1.000.000 unidades';
+
+function exigirObjeto(body) {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('O corpo deve ser um objeto JSON');
+}
+
+/** Inteiro seguro entre `minimo` e `maximo`. */
+function inteiro(valor, rotulo, minimo, maximo = ESTOQUE_MAXIMO) {
+  if (!Number.isSafeInteger(valor) || valor < minimo || valor > maximo) {
+    throw new ValidationError(`${rotulo} deve ser um inteiro entre ${minimo} e ${maximo}`);
+  }
+  return valor;
+}
 const TIPOS_AVULSOS = ['ENTRADA', 'SAIDA', 'AJUSTE'];
 const LIMITE_PADRAO = 50;
 const LIMITE_MAXIMO = 500;
@@ -41,4 +54,4 @@ function validarLimite(valor) {
 
 const critico = (bebida) => bebida.estoqueQtd <= bebida.estoqueMinimo;
 
-module.exports = { validarMovimentacao, validarLimite, critico, TIPOS_AVULSOS, LIMITE_PADRAO, LIMITE_MAXIMO };
+module.exports = { exigirObjeto, inteiro, ESTOQUE_MAXIMO, MENSAGEM_MAXIMO, validarMovimentacao, validarLimite, critico, TIPOS_AVULSOS, LIMITE_PADRAO, LIMITE_MAXIMO };

@@ -1,19 +1,11 @@
 'use strict';
 const ValidationError = require('../errors/ValidationError');
 const { validarNome, booleano, mesclar } = require('../cardapio/validators');
+const { inteiro, exigirObjeto, ESTOQUE_MAXIMO } = require('./movimentos');
+
+const PRECO_MAXIMO_CENTS = 100_000_000;
 
 const BEBIDA_PADRAO = { nome: undefined, precoCents: undefined, estoqueMinimo: 0, ativo: true };
-
-function inteiro(valor, rotulo, minimo) {
-  if (!Number.isInteger(valor) || valor < minimo) {
-    throw new ValidationError(`${rotulo} deve ser um inteiro maior ou igual a ${minimo}`);
-  }
-  return valor;
-}
-
-function exigirObjeto(body) {
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('O corpo deve ser um objeto JSON');
-}
 
 /**
  * Valida os dados cadastrais da bebida. O saldo só entra na criação (`estoqueQtd` inicial);
@@ -26,11 +18,11 @@ function validarBebida(body, atual = null) {
   const d = mesclar(atual || BEBIDA_PADRAO, body);
   return {
     nome: validarNome(d.nome),
-    precoCents: inteiro(d.precoCents, 'O preço (precoCents)', 1),
-    estoqueMinimo: inteiro(d.estoqueMinimo, 'O estoque mínimo', 0),
+    precoCents: inteiro(d.precoCents, 'O preço (precoCents)', 1, PRECO_MAXIMO_CENTS),
+    estoqueMinimo: inteiro(d.estoqueMinimo, 'O estoque mínimo', 0, ESTOQUE_MAXIMO),
     ativo: booleano(d.ativo, 'ativo'),
-    estoqueInicial: atual ? 0 : inteiro(body.estoqueQtd ?? 0, 'O estoque inicial', 0),
+    estoqueInicial: atual ? 0 : inteiro(body.estoqueQtd ?? 0, 'O estoque inicial', 0, ESTOQUE_MAXIMO),
   };
 }
 
-module.exports = { validarBebida, exigirObjeto, inteiro };
+module.exports = { validarBebida, PRECO_MAXIMO_CENTS };

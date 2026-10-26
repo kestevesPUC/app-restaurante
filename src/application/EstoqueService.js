@@ -2,7 +2,7 @@
 const NotFoundError = require('../domain/errors/NotFoundError');
 const ConflictError = require('../domain/errors/ConflictError');
 const ValidationError = require('../domain/errors/ValidationError');
-const { validarMovimentacao, validarLimite } = require('../domain/estoque/movimentos');
+const { validarMovimentacao, validarLimite, ESTOQUE_MAXIMO, MENSAGEM_MAXIMO } = require('../domain/estoque/movimentos');
 
 const VERBOS = { ENTRADA: 'entrada', SAIDA: 'saida', AJUSTE: 'ajuste' };
 
@@ -80,7 +80,7 @@ class EstoqueService {
       const bebida = this.bebidas.findById(bebidaId);
       if (!bebida) throw new ValidationError('Bebida inexistente');
       if (!this.bebidas.baixar(bebidaId, quantidade)) {
-        insuficientes.push({ bebidaId, bebida: bebida.nome, saldo: bebida.estoqueQtd, pedido: quantidade });
+        insuficientes.push({ bebidaId, bebida: bebida.nome, saldo: bebida.estoqueQtd, pedido: quantidade, motivo: bebida.ativo ? 'SALDO' : 'INATIVA' });
         continue;
       }
       const depois = this.bebidas.findById(bebidaId);
@@ -88,7 +88,12 @@ class EstoqueService {
       baixadas.push(this.#evento(depois));
     }
     if (insuficientes.length) {
-      const erro = new ConflictError(`Estoque insuficiente: ${insuficientes.map((i) => `${i.bebida} (saldo ${i.saldo}, pedido ${i.pedido})`).join('; ')}`);
+      const inativas = insuficientes.filter((i) => i.motivo === 'INATIVA');
+      const sem = insuficientes.filter((i) => i.motivo === 'SALDO');
+      const partes = [];
+      if (sem.length) partes.push(`Estoque insuficiente: ${sem.map((i) => `${i.bebida} (saldo ${i.saldo}, pedido ${i.pedido})`).join('; ')}`);
+      if (inativas.length) partes.push(`Bebida indisponível: ${inativas.map((i) => `${i.bebida} (inativa)`).join('; ')}`);
+      const erro = new ConflictError(partes.join('. '));
       erro.detalhes = insuficientes;
       throw erro;
     }
@@ -116,7 +121,7 @@ class EstoqueService {
   #somar(itens) {
     const total = new Map();
     for (const item of itens || []) {
-      if (!Number.isInteger(item?.bebidaId) || !Number.isInteger(item?.quantidade) || item.quantidade < 1) {
+      if (!Number.isInteger(item?.bebidaId) || !Number.isInteger(item?.quantidade) || item.quantidade < 1 || item.quantidade > ESTOQUE_MAXIMO) {
         throw new ValidationError('Item de bebida inválido');
       }
       total.set(item.bebidaId, (total.get(item.bebidaId) || 0) + item.quantidade);
@@ -126,7 +131,10 @@ class EstoqueService {
 
   /** Variação de saldo que a movimentação provoca; SAIDA acima do saldo é 409. */
   #delta(bebida, pedido) {
-    if (pedido.tipo === 'ENTRADA') return pedido.quantidade;
+    if (pedido.tipo === 'ENTRADA') {
+      if (bebida.estoqueQtd + pedido.quantidade > ESTOQUE_MAXIMO) throw new ValidationError(MENSAGEM_MAXIMO);
+      return pedido.quantidade;
+    }
     if (pedido.tipo === 'AJUSTE') return pedido.novaQuantidade - bebida.estoqueQtd;
     if (pedido.quantidade > bebida.estoqueQtd) {
       throw new ConflictError(`Saldo insuficiente de "${bebida.nome}" (saldo ${bebida.estoqueQtd}, saída ${pedido.quantidade})`);

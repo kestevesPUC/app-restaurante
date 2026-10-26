@@ -153,7 +153,7 @@ test('baixa de várias bebidas em que só uma falha: erro lista a insuficiente e
   } catch (e) { erro = e; }
   assert.equal(erro.status, 409);
   assert.equal(erro.message, 'Estoque insuficiente: Coca-Cola (saldo 2, pedido 3)');
-  assert.deepEqual(erro.detalhes, [{ bebidaId: a.id, bebida: 'Coca-Cola', saldo: 2, pedido: 3 }]);
+  assert.deepEqual(erro.detalhes, [{ bebidaId: a.id, bebida: 'Coca-Cola', saldo: 2, pedido: 3, motivo: 'SALDO' }]);
   assert.deepEqual([saldo(a.id), saldo(c.id), saldo(d.id)], [2, 10, 1]);
   assert.equal(app.db.prepare("SELECT COUNT(*) AS n FROM movimentacoes_estoque WHERE tipo = 'VENDA'").get().n, 0);
 });
@@ -213,4 +213,54 @@ test('estornar bebida desativada depois da venda ainda devolve o saldo', async (
   await app.request('PUT', `/api/bebidas/${b.id}`, { user: 'ADM', body: { ativo: false } });
   estornar(pedido);
   assert.equal(saldo(b.id), 10);
+});
+
+const ABSURDOS = [1e20, Number.MAX_SAFE_INTEGER, 1_000_001];
+const semEfeito = (id, saldoEsperado, movs) => {
+  assert.equal(saldo(id), saldoEsperado);
+  assert.equal(movimentos(id).length, movs);
+};
+
+test('quantidades absurdas (1e20, MAX_SAFE_INTEGER, 1.000.001) em ENTRADA, SAIDA e AJUSTE → 400, nada gravado, sem evento', async () => {
+  const b = await nova({ estoqueQtd: 10 });
+  const eventos = [];
+  app.bus.subscribe((e) => eventos.push(e));
+  for (const v of ABSURDOS) {
+    assert.equal((await mov(b.id, { tipo: 'ENTRADA', quantidade: v })).status, 400, `ENTRADA ${v}`);
+    assert.equal((await mov(b.id, { tipo: 'SAIDA', quantidade: v, motivo: 'm' })).status, 400, `SAIDA ${v}`);
+    assert.equal((await mov(b.id, { tipo: 'AJUSTE', novaQuantidade: v, motivo: 'm' })).status, 400, `AJUSTE ${v}`);
+  }
+  semEfeito(b.id, 10, 1);
+  assert.equal(eventos.length, 0);
+});
+
+test('ENTRADA que estouraria o saldo máximo → 400 "Estoque máximo de 1.000.000 unidades", saldo intacto', async () => {
+  const b = await nova({ estoqueQtd: 999_999 });
+  const eventos = [];
+  app.bus.subscribe((e) => eventos.push(e));
+  const res = await mov(b.id, { tipo: 'ENTRADA', quantidade: 2 });
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /Estoque máximo de 1\.000\.000 unidades/);
+  semEfeito(b.id, 999_999, 1);
+  assert.equal(eventos.length, 0);
+  assert.equal((await mov(b.id, { tipo: 'ENTRADA', quantidade: 1 })).body.estoqueQtd, 1_000_000);
+  assert.equal((await mov(b.id, { tipo: 'AJUSTE', novaQuantidade: 1_000_000, motivo: 'm' })).status, 200);
+});
+
+test('baixarParaPedido recusa quantidade acima do máximo ou não segura', async () => {
+  const b = await nova();
+  for (const quantidade of ABSURDOS) assert.throws(() => baixar(novoPedido(), [{ bebidaId: b.id, quantidade }]), falhaCom(400));
+  semEfeito(b.id, 10, 1);
+});
+
+test('baixa de bebida inativa diz que está inativa e detalhes traz motivo INATIVA/SALDO', async () => {
+  const inativa = await nova({ nome: 'Velha', estoqueQtd: 5 });
+  const curta = await nova({ nome: 'Curta', estoqueQtd: 1 });
+  await app.request('PUT', `/api/bebidas/${inativa.id}`, { user: 'ADM', body: { ativo: false } });
+  let erro;
+  try { baixar(novoPedido(), [{ bebidaId: inativa.id, quantidade: 1 }, { bebidaId: curta.id, quantidade: 2 }]); } catch (e) { erro = e; }
+  assert.equal(erro.status, 409);
+  assert.match(erro.message, /Bebida indisponível: Velha \(inativa\)/);
+  assert.match(erro.message, /Estoque insuficiente: Curta \(saldo 1, pedido 2\)/);
+  assert.deepEqual(erro.detalhes.map((d) => [d.bebida, d.motivo]), [['Velha', 'INATIVA'], ['Curta', 'SALDO']]);
 });

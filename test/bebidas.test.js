@@ -146,3 +146,19 @@ test('auditoria de criar, alterar e excluir bebida', async () => {
   assert.deepEqual(acoes.map((a) => a.acao), ['criar', 'alterar', 'excluir']);
   assert.ok(acoes.every((a) => a.usuario === 'ADM'));
 });
+
+test('campos numéricos absurdos na criação e no PUT → 400, nada gravado', async () => {
+  const campos = ['estoqueQtd', 'estoqueMinimo'];
+  for (const campo of campos) {
+    for (const v of [1e20, Number.MAX_SAFE_INTEGER, 1_000_001]) {
+      assert.equal((await post('/api/bebidas', { nome: 'Z', precoCents: 100, [campo]: v })).status, 400, `${campo} ${v}`);
+    }
+  }
+  for (const v of [1e20, Number.MAX_SAFE_INTEGER, 100_000_001]) assert.equal((await post('/api/bebidas', { nome: 'Z', precoCents: v })).status, 400, `preco ${v}`);
+  assert.equal((await get('/api/bebidas')).body.length, 0);
+  assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM movimentacoes_estoque').get().n, 0);
+  const b = await nova({ estoqueQtd: 1 });
+  for (const v of [1e20, 1_000_001]) assert.equal((await put(`/api/bebidas/${b.id}`, { estoqueMinimo: v })).status, 400);
+  assert.equal((await put(`/api/bebidas/${b.id}`, { precoCents: 1e20 })).status, 400);
+  assert.equal((await put(`/api/bebidas/${b.id}`, { precoCents: 100_000_000, estoqueMinimo: 1_000_000 })).status, 200);
+});
