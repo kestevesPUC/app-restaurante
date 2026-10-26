@@ -40,7 +40,7 @@ Decisões que só o dono do produto pode tomar e que mudam o que será construí
 | P1 | Maquininha: **Moderninha Smart (PagBank)**, integrada por app Android próprio |
 | P2 | **Não** emite NFC-e/SAT |
 | P3 | **Os dois modelos**: balcão (paga ao finalizar) e comanda de mesa (rodadas à cozinha, paga ao fechar a conta) |
-| P9 | Andon no **segundo monitor**, quando houver, e/ou em **tablet** na rede local |
+| P9 | Andon no **tablet da cozinha** (dispositivo principal, rede local); segundo monitor no caixa é opcional |
 
 ## Decisões tomadas pelo arquiteto (para revisão)
 
