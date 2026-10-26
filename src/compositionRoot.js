@@ -10,6 +10,7 @@ const CategoriaRepository = require('./infrastructure/repositories/CategoriaRepo
 const IngredienteRepository = require('./infrastructure/repositories/IngredienteRepository');
 const PratoRepository = require('./infrastructure/repositories/PratoRepository');
 const MesaRepository = require('./infrastructure/repositories/MesaRepository');
+const PedidoRepository = require('./infrastructure/repositories/PedidoRepository');
 const PasswordHasher = require('./infrastructure/security/PasswordHasher');
 const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
@@ -23,6 +24,8 @@ const ConfigService = require('./application/ConfigService');
 const CadastroService = require('./application/CadastroService');
 const PratoService = require('./application/PratoService');
 const MesaService = require('./application/MesaService');
+const PedidoService = require('./application/PedidoService');
+const MontadorDeItens = require('./application/MontadorDeItens');
 const FotoValidator = require('./domain/validation/FotoValidator');
 const { validarCategoria, validarIngrediente } = require('./domain/cardapio/validators');
 
@@ -62,6 +65,7 @@ function buildApplication({
     ingredientes: new IngredienteRepository(db),
     pratos: new PratoRepository(db),
     mesas: new MesaRepository(db),
+    pedidos: new PedidoRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -77,14 +81,19 @@ function buildApplication({
     config: new ConfigService({ repository: repositories.configuracoes, audit }),
     categorias: new CadastroService({ entity: 'categoria', repository: repositories.categorias, validate: validarCategoria, audit }),
     ingredientes: new CadastroService({ entity: 'ingrediente', repository: repositories.ingredientes, validate: validarIngrediente, audit }),
-    // A Tarefa 11 liga `pratoJaPedido` ao repositório de pedidos.
     pratos: new PratoService({
       repository: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, fotoValidator: new FotoValidator(), audit,
+      pratoJaPedido: (id) => repositories.pedidos.pratoJaPedido(id),
     }),
-    // A Tarefa 11 liga `comandaNaoPagaDaMesa` ao repositório de pedidos.
-    mesas: new MesaService({ repository: repositories.mesas, audit, bus }),
+    mesas: new MesaService({
+      repository: repositories.mesas, audit, bus, comandaNaoPagaDaMesa: (id) => repositories.pedidos.comandaNaoPagaDaMesa(id) !== null,
+    }),
     adminBootstrap: new AdminBootstrap({ usuarios: repositories.usuarios, hasher, audit, clock }),
   };
+  services.pedidos = new PedidoService({
+    db, repository: repositories.pedidos, mesaRepository: repositories.mesas, mesas: services.mesas, config: services.config, audit, bus, relogio,
+    montador: new MontadorDeItens({ pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes }),
+  });
 
   const router = new Router();
   new AuthController(services.auth).register(router);

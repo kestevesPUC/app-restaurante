@@ -134,4 +134,86 @@ module.exports = [
       `);
     },
   },
+  {
+    version: 4,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pedidos (
+          id INTEGER PRIMARY KEY,
+          data_local TEXT NOT NULL,
+          numero_dia INTEGER NOT NULL CHECK (numero_dia >= 1),
+          tipo TEXT NOT NULL CHECK (tipo IN ('BALCAO','MESA')),
+          mesa_id INTEGER REFERENCES mesas(id) ON DELETE RESTRICT,
+          cliente_nome TEXT,
+          situacao TEXT NOT NULL DEFAULT 'ABERTO' CHECK (situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO','PAGO','CANCELADO')),
+          subtotal_cents INTEGER NOT NULL DEFAULT 0,
+          desconto_cents INTEGER NOT NULL DEFAULT 0,
+          total_cents INTEGER NOT NULL DEFAULT 0,
+          observacao TEXT,
+          criado_por INTEGER NOT NULL REFERENCES usuarios(id),
+          criado_em TEXT NOT NULL,
+          finalizado_em TEXT,
+          pago_em TEXT,
+          cancelado_em TEXT,
+          cancelado_por INTEGER REFERENCES usuarios(id),
+          motivo_cancelamento TEXT,
+          UNIQUE (data_local, numero_dia),
+          CHECK ((tipo = 'MESA' AND mesa_id IS NOT NULL) OR (tipo = 'BALCAO' AND cliente_nome IS NOT NULL)),
+          CHECK (total_cents = subtotal_cents - desconto_cents AND desconto_cents BETWEEN 0 AND subtotal_cents)
+        );
+        CREATE UNIQUE INDEX ux_comanda_aberta ON pedidos(mesa_id) WHERE tipo = 'MESA' AND situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO');
+        CREATE INDEX ix_pedidos_data ON pedidos(data_local, id);
+        CREATE INDEX ix_pedidos_situacao ON pedidos(situacao);
+
+        CREATE TABLE pedido_envios (
+          id INTEGER PRIMARY KEY,
+          pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+          rodada INTEGER NOT NULL CHECK (rodada >= 1),
+          cozinha_situacao TEXT NOT NULL DEFAULT 'NA_FILA' CHECK (cozinha_situacao IN ('NA_FILA','EM_PREPARO','PRONTO','ENTREGUE')),
+          vai_para_cozinha INTEGER NOT NULL DEFAULT 1 CHECK (vai_para_cozinha IN (0,1)),
+          enviado_em TEXT NOT NULL,
+          enviado_por INTEGER REFERENCES usuarios(id),
+          preparo_iniciado_em TEXT,
+          pronto_em TEXT,
+          entregue_em TEXT,
+          UNIQUE (pedido_id, rodada)
+        );
+        CREATE INDEX ix_envios_andon ON pedido_envios(cozinha_situacao, enviado_em) WHERE vai_para_cozinha = 1 AND cozinha_situacao <> 'ENTREGUE';
+        CREATE INDEX ix_envios_pedido ON pedido_envios(pedido_id);
+
+        CREATE TABLE pedido_itens (
+          id INTEGER PRIMARY KEY,
+          pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+          envio_id INTEGER REFERENCES pedido_envios(id) ON DELETE RESTRICT,
+          prato_id INTEGER NOT NULL REFERENCES pratos(id) ON DELETE RESTRICT,
+          prato_nome TEXT NOT NULL,
+          preco_unit_cents INTEGER NOT NULL CHECK (preco_unit_cents >= 0),
+          adicionais_cents INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cents >= 0),
+          quantidade INTEGER NOT NULL CHECK (quantidade >= 1),
+          total_cents INTEGER NOT NULL CHECK (total_cents = (preco_unit_cents + adicionais_cents) * quantidade),
+          observacao TEXT,
+          ordem INTEGER NOT NULL DEFAULT 0,
+          cancelado_em TEXT,
+          cancelado_por INTEGER REFERENCES usuarios(id),
+          motivo_cancelamento TEXT
+        );
+        CREATE INDEX ix_itens_pedido ON pedido_itens(pedido_id);
+        CREATE INDEX ix_itens_prato ON pedido_itens(prato_id);
+        CREATE INDEX ix_itens_envio ON pedido_itens(envio_id);
+
+        CREATE TABLE item_modificacoes (
+          id INTEGER PRIMARY KEY,
+          item_id INTEGER NOT NULL REFERENCES pedido_itens(id) ON DELETE CASCADE,
+          ingrediente_id INTEGER NOT NULL REFERENCES ingredientes(id) ON DELETE RESTRICT,
+          ingrediente_nome TEXT NOT NULL,
+          tipo TEXT NOT NULL CHECK (tipo IN ('REMOVER','ADICIONAR')),
+          quantidade INTEGER NOT NULL CHECK (quantidade >= 1),
+          preco_unit_cents INTEGER NOT NULL CHECK (preco_unit_cents >= 0),
+          UNIQUE (item_id, ingrediente_id),
+          CHECK (tipo = 'ADICIONAR' OR (quantidade = 1 AND preco_unit_cents = 0))
+        );
+        CREATE INDEX ix_modificacoes_ingrediente ON item_modificacoes(ingrediente_id);
+      `);
+    },
+  },
 ];
