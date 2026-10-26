@@ -31,6 +31,9 @@ const BebidaService = require('./application/BebidaService');
 const EstoqueService = require('./application/EstoqueService');
 const ClienteController = require('./presentation/http/controllers/ClienteController');
 const ClienteService = require('./application/ClienteService');
+const RelatorioRepository = require('./infrastructure/repositories/RelatorioRepository');
+const RelatorioService = require('./application/RelatorioService');
+const RelatorioController = require('./presentation/http/controllers/RelatorioController');
 const NotificacaoRepository = require('./infrastructure/repositories/NotificacaoRepository');
 const MensageiroSimulado = require('./infrastructure/whatsapp/MensageiroSimulado');
 const NotificacaoService = require('./application/NotificacaoService');
@@ -91,6 +94,7 @@ function buildApplication({
     bebidas: new BebidaRepository(db),
     movimentacoes: new MovimentacaoRepository(db),
     clientes: new ClienteRepository(db),
+    relatorios: new RelatorioRepository(db),
     notificacoes: new NotificacaoRepository(db),
   };
   const hasher = new PasswordHasher();
@@ -129,6 +133,7 @@ function buildApplication({
   services.bebidas = new BebidaService({ db, repository: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.estoque = new EstoqueService({ db, bebidas: repositories.bebidas, movimentacoes: repositories.movimentacoes, audit, bus, clock });
   services.clientes = new ClienteService({ repository: repositories.clientes, audit, clock });
+  services.relatorios = new RelatorioService({ repository: repositories.relatorios, relogio });
   const consulta = new ConsultaDePedidos({ repository: repositories.pedidos, config: services.config, relogio });
   // PedidoService chama a porta `aposMudarStatus` e NotificacaoService precisa do pedido carregado (consulta.carregar):
   // a função abaixo só resolve `services.notificacoes` no momento da chamada, depois de tudo construído.
@@ -159,6 +164,7 @@ function buildApplication({
   new NotificacaoController(services.notificacoes, services.config).register(router);
   new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp, logger }).register(router);
   new ClienteController(services.clientes).register(router);
+  new RelatorioController(services.relatorios).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
   new AuditController(repositories.auditoria).register(router);

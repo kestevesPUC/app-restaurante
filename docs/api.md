@@ -161,3 +161,26 @@ Ao passar para `PRONTO_RETIRADA` ou `PRONTO_ENTREGA`, o sistema envia ao cliente
 | GET/PUT | `/api/config/whatsapp` | A | `{numeroEmpresa, modeloRetirada, modeloEntrega}`; PUT aceita campos parciais. Modelos: 1–1000 caracteres, com `{nome}` (primeiro nome) e `{numero}`; `numeroEmpresa` vazio ou telefone válido (gravado em E.164) |
 
 Evento SSE `notificacao`: `{id, pedidoId, situacao, erro, automatica}`.
+
+## Relatórios
+
+Só nível A (B e C → 403, inclusive para tipo inexistente). Datas **locais** `AAAA-MM-DD`; `ate` é inclusivo. Período padrão: dia 1 do mês local atual até hoje; `de > ate`, data inválida ou intervalo acima de 3660 dias → 400.
+
+| Método | Rota | Descrição |
+| --- | --- | --- |
+| GET | `/api/relatorios` | tipos disponíveis: `[{tipo, titulo, filtros}]` |
+| GET | `/api/relatorios/:tipo` | filtros `de`, `ate`, `agrupar` (`dia`\|`mes`\|`ano`, padrão `dia`), `limite` (1–200, padrão 20, rankings); tipo inexistente → 404 |
+
+Resposta: `{ titulo, periodo: {de, ate} | null, colunas: [{chave, titulo, tipo}], linhas, totais }` com `tipo` ∈ `texto|inteiro|dinheiro|duracao|data`; dinheiro em centavos, duração em segundos. Período sem dados → `linhas: []` e totais zerados.
+
+| Tipo | Conteúdo |
+| --- | --- |
+| `pedidos-periodo` | confirmados (≠ ABERTO) por `confirmado_em`; totais `quantidade`, `totalCents`, `porStatus` |
+| `pedidos-finalizados` | pela última entrada em FINALIZADO no histórico |
+| `pedidos-cancelados` | por `cancelado_em`, com motivo |
+| `tempo-medio-preparo` | primeiro `EM_PREPARO` → primeiro `PRONTO_*` posterior (data do PRONTO); totais média/mín./máx. em segundos (null sem dados) |
+| `faturamento` | FINALIZADOS agrupados pela data local da finalização: quantidade, faturamento, ticket médio |
+| `ticket-medio` | uma linha com o mesmo cálculo para o período (`round(faturamento/quantidade)`, 0 sem pedidos) |
+| `bebidas-mais-vendidas` | itens de bebida de pedidos finalizados, por quantidade desc e nome |
+| `estoque-atual` / `estoque-critico` | sem período; situação `OK`\|`CRITICO`\|`INATIVA`; crítico = ativas com saldo ≤ mínimo |
+| `clientes-frequentes` / `clientes-maior-gasto` | só finalizados; desempate por gasto/quantidade e nome |
