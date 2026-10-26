@@ -29,10 +29,10 @@ class PedidoController {
 
   register(router) {
     const s = this.service;
-    router.add('GET', '/api/pedidos', (ctx) => s.listar(filtrosDePedidos(ctx.query)));
+    router.add('GET', '/api/pedidos', (ctx) => s.listar(ctx.user, filtrosDePedidos(ctx.query)));
     router.add('GET', '/api/pedidos.csv',
-      (ctx) => FileResponse.csv('pedidos.csv', this.csv.build(COLUNAS_CSV, s.listar(filtrosDePedidos(ctx.query)))));
-    router.add('GET', '/api/pedidos/:id', (ctx) => s.obter(idPositivo(ctx.params.id, 'O pedido')));
+      (ctx) => FileResponse.csv('pedidos.csv', this.csv.build(COLUNAS_CSV, s.listar(ctx.user, filtrosDePedidos(ctx.query)))));
+    router.add('GET', '/api/pedidos/:id', (ctx) => s.obter(ctx.user, idPositivo(ctx.params.id, 'O pedido')));
   }
 }
 

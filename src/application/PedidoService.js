@@ -146,16 +146,16 @@ class PedidoService {
     });
   }
 
-  listar(filtros = {}) {
-    return this.consulta.listar(filtros);
+  listar(user, filtros = {}) {
+    return this.consulta.listar(user, filtros);
   }
 
-  obter(id, user = null) {
-    return this.consulta.obter(id, user);
+  obter(user, id) {
+    return this.consulta.obter(user, id);
   }
 
-  listarCozinha() {
-    return this.consulta.listarCozinha();
+  listarCozinha(user) {
+    return this.consulta.listarCozinha(user);
   }
 
   /**
@@ -194,7 +194,7 @@ class PedidoService {
   }
 
   #publicar(pedidoId) {
-    const pedido = this.consulta.obter(pedidoId);
+    const pedido = this.consulta.carregar(pedidoId);
     this.bus?.publish('pedido', { id: pedido.id, status: pedido.status });
     return pedido;
   }

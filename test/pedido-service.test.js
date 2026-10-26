@@ -85,7 +85,7 @@ test('confirmar sem nome ou sem telefone do cliente → 400', () => {
     const e = erroDe(() => s.pedidos.confirmar(B, p.id));
     assert.equal(e.status, 400);
     assert.equal(e.message, 'Informe o nome e o telefone do cliente');
-    assert.equal(s.pedidos.obter(p.id).status, 'ABERTO');
+    assert.equal(s.pedidos.obter(B, p.id).status, 'ABERTO');
   }
 });
 
@@ -93,7 +93,7 @@ test('confirmar sem itens → 400', () => {
   cardapio();
   const p = rascunho([]);
   assert.equal(status(() => s.pedidos.confirmar(B, p.id)), 400);
-  assert.equal(s.pedidos.obter(p.id).status, 'ABERTO');
+  assert.equal(s.pedidos.obter(B, p.id).status, 'ABERTO');
 });
 
 test('confirmar baixa o estoque das bebidas e grava VENDA com o pedido', () => {
@@ -115,7 +115,7 @@ test('confirmar com bebida acima do saldo → 409 listando a bebida, estoque e s
   assert.equal(e.status, 409);
   assert.match(e.message, /Coca-Cola \(saldo 2, pedido 4\)/);
   assert.equal(saldo(c.coca), 2);
-  const depois = s.pedidos.obter(p.id);
+  const depois = s.pedidos.obter(B, p.id);
   assert.equal(depois.status, 'ABERTO');
   assert.equal(depois.cliente.id, null, 'cliente não fica gravado');
   assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM clientes').get().n, 0);
@@ -141,7 +141,7 @@ test('10 pedidos de 3 unidades num estoque de 25: 8 passam, o 9º falha, saldo f
   });
   assert.deepEqual(resultados, [200, 200, 200, 200, 200, 200, 200, 200, 409, 409]);
   assert.equal(saldo(c.coca), 1);
-  assert.equal(s.pedidos.obter(pedidos[8].id).status, 'ABERTO');
+  assert.equal(s.pedidos.obter(B, pedidos[8].id).status, 'ABERTO');
 });
 
 test('reabrir estorna o estoque e volta a ABERTO', () => {
@@ -204,8 +204,8 @@ test('mudarStatus grava histórico (anterior, novo, usuário, instante) na mesma
   eventos.length = 0;
   assert.throws(() => s.pedidos.mudarStatus(C, p.id, 'PRONTO_RETIRADA'), /falha forçada/);
   repo.registrarHistorico = original;
-  assert.equal(s.pedidos.obter(p.id).status, 'EM_PREPARO');
-  assert.equal(s.pedidos.obter(p.id).historico.length, 2);
+  assert.equal(s.pedidos.obter(B, p.id).status, 'EM_PREPARO');
+  assert.equal(s.pedidos.obter(B, p.id).historico.length, 2);
   assert.deepEqual(eventos, []);
 });
 
@@ -253,7 +253,7 @@ test('tempoEstimadoMin com SOMA em cozinha.estimativa', () => {
   const p = rascunho([prato(c.burger, { quantidade: 3 }), prato(c.batata)]);
   assert.equal(s.pedidos.confirmar(B, p.id).tempoEstimadoMin, 45);
   s.config.set(A, 'cozinha.estimativa', 'MAXIMO');
-  assert.equal(s.pedidos.obter(p.id).tempoEstimadoMin, 45, 'confirmado: valor gravado');
+  assert.equal(s.pedidos.obter(B, p.id).tempoEstimadoMin, 45, 'confirmado: valor gravado');
 });
 
 test('prato com tempo de preparo inválido no banco → erro claro, nada gravado', () => {
@@ -279,7 +279,7 @@ test('preço do cliente ignorado e retrato mantido ao mudar o preço do prato/be
   assert.equal(p.itens[1].precoUnitCents, 600);
   s.pratos.update(A, c.burger.id, { precoCents: 9999, nome: 'X-Novo' });
   s.bebidas.update(A, c.coca.id, { nome: 'Coca Nova', precoCents: 999, estoqueMinimo: 0, ativo: true });
-  const depois = s.pedidos.obter(p.id);
+  const depois = s.pedidos.obter(B, p.id);
   assert.deepEqual(depois.itens.map((i) => [i.nome, i.precoUnitCents, i.tempoPreparoMin]), [['X-Burger', 2500, 10], ['Coca-Cola', 600, 0]]);
   assert.deepEqual(depois.itens[0].modificacoes.map((m) => [m.ingredienteNome, m.tipo]), [['Cebola', 'REMOVER']]);
   assert.equal(depois.totalCents, 3100);
@@ -316,8 +316,8 @@ test('cliente é criado/atualizado pelo telefone ao confirmar e o pedido guarda 
   const c2 = s.pedidos.confirmar(B, p2.id).cliente;
   assert.equal(c2.id, c1.id);
   assert.equal(app.db.prepare('SELECT nome FROM clientes WHERE id = ?').get(c1.id).nome, 'Ana Maria');
-  assert.equal(s.pedidos.obter(p1.id).cliente.nome, 'Ana', 'retrato do pedido antigo');
-  assert.equal(s.pedidos.obter(p2.id).cliente.nome, 'Ana Maria');
+  assert.equal(s.pedidos.obter(B, p1.id).cliente.nome, 'Ana', 'retrato do pedido antigo');
+  assert.equal(s.pedidos.obter(B, p2.id).cliente.nome, 'Ana Maria');
 });
 
 test('eventos pedido/estoque só após o commit (nenhum evento quando a transação falha)', () => {
@@ -358,7 +358,7 @@ test('exceção em aposMudarStatus não derruba a confirmação e é registrada'
   const p = rascunho([prato(c.burger)]);
   s.pedidos.aposMudarStatus = () => { throw new Error('whatsapp fora'); };
   assert.equal(s.pedidos.confirmar(B, p.id).status, 'RECEBIDO');
-  assert.equal(s.pedidos.obter(p.id).status, 'RECEBIDO');
+  assert.equal(s.pedidos.obter(B, p.id).status, 'RECEBIDO');
   assert.ok(app.erros.some((e) => /whatsapp fora/.test(String(e?.message ?? e))));
 });
 
@@ -384,7 +384,7 @@ test('listar: hoje por padrão, id crescente, filtros de status e busca por núm
   const ana = rascunho([prato(c.burger)], { nome: 'Ána Souza', telefone: '(21) 98888-7777' });
   const bia = rascunho([prato(c.burger)], { nome: 'Bia', telefone: '(11) 95555-1234' });
   s.pedidos.confirmar(B, bia.id);
-  const ids = (filtros) => s.pedidos.listar(filtros).map((p) => p.id);
+  const ids = (filtros) => s.pedidos.listar(B, filtros).map((p) => p.id);
   assert.deepEqual(ids(), [ana.id, bia.id]);
   assert.deepEqual(ids({ status: 'RECEBIDO' }), [bia.id]);
   assert.ok(ids({ q: String(ana.id) }).includes(ana.id), 'número exato do pedido');
@@ -395,9 +395,9 @@ test('listar: hoje por padrão, id crescente, filtros de status e busca por núm
   assert.deepEqual(ids({ q: '55' }), [bia.id], '"55" não casa o +55 de todos');
   assert.deepEqual(ids({ limite: 1 }), [ana.id]);
   assert.deepEqual(ids({ de: '2000-01-01', ate: '2000-01-02' }), []);
-  assert.equal(status(() => s.pedidos.listar({ limite: 1001 })), 400);
-  assert.equal(status(() => s.pedidos.listar({ status: 'PAGO' })), 400);
-  const linha = s.pedidos.listar({ q: String(bia.id) }).find((p) => p.id === bia.id);
+  assert.equal(status(() => s.pedidos.listar(B, { limite: 1001 })), 400);
+  assert.equal(status(() => s.pedidos.listar(B, { status: 'PAGO' })), 400);
+  const linha = s.pedidos.listar(B, { q: String(bia.id) }).find((p) => p.id === bia.id);
   assert.equal(linha.itens.length, 1);
   assert.equal(linha.historico.length, 1);
 });
@@ -414,8 +414,82 @@ test('listarCozinha: só RECEBIDO/EM_PREPARO/PRONTO_* por confirmação; C obté
   s.pedidos.confirmar(B, p3.id);
   s.pedidos.cancelar(B, p3.id, 'x');
   s.pedidos.mudarStatus(C, p1.id, 'EM_PREPARO');
-  assert.deepEqual(s.pedidos.listarCozinha().map((p) => [p.id, p.status]), [[p2.id, 'RECEBIDO'], [p1.id, 'EM_PREPARO']]);
-  assert.equal(s.pedidos.obter(p1.id, C).id, p1.id);
-  assert.equal(status(() => s.pedidos.obter(p3.id, C)), 403);
-  assert.equal(status(() => s.pedidos.obter(999)), 404);
+  assert.deepEqual(s.pedidos.listarCozinha(C).map((p) => [p.id, p.status]), [[p2.id, 'RECEBIDO'], [p1.id, 'EM_PREPARO']]);
+  assert.equal(s.pedidos.obter(C, p1.id).id, p1.id);
+  assert.equal(status(() => s.pedidos.obter(C, p3.id)), 403);
+  assert.equal(status(() => s.pedidos.obter(B, 999)), 404);
+});
+
+test('leitura autorizada no serviço: listar só A/B; obter C só pedidos da cozinha; usuário ausente/sem nível → 403', () => {
+  const c = cardapio();
+  const rasc = rascunho([prato(c.burger)]);
+  const preparo = rascunho([prato(c.burger)]);
+  const fim = rascunho([prato(c.burger)]);
+  s.pedidos.confirmar(B, preparo.id);
+  s.pedidos.mudarStatus(C, preparo.id, 'EM_PREPARO');
+  s.pedidos.confirmar(B, fim.id);
+  for (const st of ['EM_PREPARO', 'PRONTO_RETIRADA', 'FINALIZADO']) s.pedidos.mudarStatus(A, fim.id, st);
+
+  assert.equal(status(() => s.pedidos.listar(C)), 403);
+  assert.equal(status(() => s.pedidos.obter(C, rasc.id)), 403);
+  assert.equal(status(() => s.pedidos.obter(C, fim.id)), 403);
+  assert.equal(s.pedidos.obter(C, preparo.id).status, 'EM_PREPARO');
+  for (const u of [null, undefined, {}, { nivel: 'X' }]) {
+    assert.equal(status(() => s.pedidos.listar(u)), 403);
+    assert.equal(status(() => s.pedidos.obter(u, preparo.id)), 403);
+    assert.equal(status(() => s.pedidos.listarCozinha(u)), 403);
+  }
+  for (const u of [A, B]) {
+    assert.equal(s.pedidos.listar(u).length, 3);
+    assert.equal(s.pedidos.obter(u, rasc.id).id, rasc.id);
+    assert.equal(s.pedidos.obter(u, fim.id).id, fim.id);
+    assert.deepEqual(s.pedidos.listarCozinha(u).map((p) => p.id), [preparo.id]);
+  }
+  assert.deepEqual(s.pedidos.listarCozinha(C).map((p) => p.id), [preparo.id]);
+});
+
+test('confirmar com duas bebidas e a SEGUNDA sem saldo → 409; a primeira volta ao saldo original, sem VENDA nem cliente', () => {
+  const c = cardapio({ estoque: 10 });
+  const fanta = s.bebidas.create(A, { nome: 'Fanta', precoCents: 500, estoqueQtd: 1, estoqueMinimo: 0 });
+  const p = rascunho([bebida(c.coca, 3), bebida(fanta, 1)]);
+  s.estoque.movimentar(A, fanta.id, { tipo: 'SAIDA', quantidade: 1, motivo: 'quebra' });
+  const e = erroDe(() => s.pedidos.confirmar(B, p.id));
+  assert.equal(e.status, 409);
+  assert.match(e.message, /Fanta/);
+  assert.equal(saldo(c.coca), 10);
+  assert.equal(saldo(fanta), 0);
+  assert.equal(movimentos(p.id).length, 0);
+  assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM clientes').get().n, 0);
+  assert.equal(s.pedidos.obter(B, p.id).status, 'ABERTO');
+});
+
+test('cancelar depois de reabrir não estorna duas vezes', () => {
+  const c = cardapio({ estoque: 10 });
+  const p = rascunho([bebida(c.coca, 4)]);
+  s.pedidos.confirmar(B, p.id);
+  s.pedidos.reabrir(B, p.id);
+  s.pedidos.cancelar(B, p.id, 'desistiu');
+  assert.equal(saldo(c.coca), 10);
+  assert.deepEqual(movimentos(p.id).map((m) => [m.tipo, m.quantidade]), [['VENDA', -4], ['ESTORNO', 4]]);
+});
+
+test('falha forçada de audit.record em confirmar reverte estoque, status, cliente e histórico', () => {
+  const c = cardapio({ estoque: 10 });
+  const p = rascunho([prato(c.burger), bebida(c.coca, 2)]);
+  const original = s.audit.record;
+  s.audit.record = function (entrada) {
+    if (entrada.acao === 'confirmar') throw new Error('auditoria fora');
+    return original.call(this, entrada);
+  };
+  eventos.length = 0;
+  assert.throws(() => s.pedidos.confirmar(B, p.id), /auditoria fora/);
+  s.audit.record = original;
+  const depois = s.pedidos.obter(B, p.id);
+  assert.equal(depois.status, 'ABERTO');
+  assert.equal(depois.cliente.id, null);
+  assert.deepEqual(depois.historico, []);
+  assert.equal(saldo(c.coca), 10);
+  assert.equal(movimentos(p.id).length, 0);
+  assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM clientes').get().n, 0);
+  assert.deepEqual(eventos, []);
 });

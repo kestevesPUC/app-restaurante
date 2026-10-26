@@ -24,6 +24,10 @@ function digitosDeTelefone(termo) {
   return digitos || null;
 }
 
+function exigirNivel(user, niveis) {
+  if (!user || !niveis.includes(user.nivel)) throw new ForbiddenError('Sem permissão para consultar pedidos');
+}
+
 /** Leitura de pedidos no formato `Pedido` (listagens, detalhe, fila da cozinha). */
 class ConsultaDePedidos {
   /**
@@ -36,7 +40,9 @@ class ConsultaDePedidos {
     Object.assign(this, { repository, config, relogio });
   }
 
-  listar({ de, ate, status, q, limite } = {}) {
+  /** Grade de pedidos: só A/B. */
+  listar(user, { de, ate, status, q, limite } = {}) {
+    exigirNivel(user, ['A', 'B']);
     const hoje = dataLocalDe(this.relogio());
     const inicio = de || hoje;
     const fim = ate || de || hoje;
@@ -49,16 +55,25 @@ class ConsultaDePedidos {
     return this.montar(linhas);
   }
 
-  /** `user` opcional: a Cozinha (C) só enxerga pedidos ativos na cozinha. */
-  obter(id, user = null) {
-    const linha = this.repository.findById(Number(id));
-    if (!linha) throw new NotFoundError('Pedido não encontrado');
-    if (user?.nivel === 'C' && !DA_COZINHA.includes(linha.status)) throw new ForbiddenError('A cozinha só consulta pedidos em andamento');
-    return this.montar([linha])[0];
+  /** A/B: qualquer pedido; C: só pedidos ativos na cozinha. */
+  obter(user, id) {
+    exigirNivel(user, ['A', 'B', 'C']);
+    const pedido = this.carregar(id);
+    if (user.nivel === 'C' && !DA_COZINHA.includes(pedido.status)) throw new ForbiddenError('A cozinha só consulta pedidos em andamento');
+    return pedido;
   }
 
-  listarCozinha() {
+  /** Fila da cozinha: A, B ou C. */
+  listarCozinha(user) {
+    exigirNivel(user, ['A', 'B', 'C']);
     return this.montar(this.repository.listarCozinha());
+  }
+
+  /** Uso interno do serviço (sem autorização): pedido completo ou 404. */
+  carregar(id) {
+    const linha = this.repository.findById(Number(id));
+    if (!linha) throw new NotFoundError('Pedido não encontrado');
+    return this.montar([linha])[0];
   }
 
   /** Converte linhas de `pedidos` em `Pedido` (itens e histórico em lote). */
