@@ -85,7 +85,7 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
   };
 
   openDialog(html, somenteLeitura ? async () => {} : salvar,
-    async () => { await reload(); if (!document.querySelector('#msg .err')) notify(prato ? 'Prato atualizado' : 'Prato cadastrado'); },
+    async () => { if (somenteLeitura) return; await reload(); if (!document.querySelector('#msg .err')) notify(prato ? 'Prato atualizado' : 'Prato cadastrado'); },
     { confirmLabel: somenteLeitura ? 'Fechar' : 'Salvar', hideCancel: somenteLeitura });
 
   const dlg = document.getElementById('dlg');
