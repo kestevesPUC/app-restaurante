@@ -5,7 +5,7 @@ const { validarNome, mesclar, booleano } = require('./validators');
 const CODIGO_MAX = 20;
 const QUANTIDADE_MAX = 40;
 const DESCRICAO_MAX = 300;
-const PRATO_PADRAO = { nome: undefined, codigo: null, categoriaId: undefined, descricao: null, precoCents: undefined, ativo: true };
+const PRATO_PADRAO = { nome: undefined, codigo: null, categoriaId: undefined, descricao: null, precoCents: undefined, tempoPreparoMin: undefined, ativo: true };
 
 function textoOpcional(valor, max, rotulo) {
   if (valor === null || valor === undefined) return null;
@@ -42,16 +42,19 @@ function validarPrato(body, atual = PRATO_PADRAO) {
   const d = mesclar(atual, body);
   if (!Number.isInteger(d.categoriaId) || d.categoriaId <= 0) throw new ValidationError('Informe a categoria');
   if (!Number.isInteger(d.precoCents) || d.precoCents <= 0) throw new ValidationError('O preço deve ser um inteiro de centavos maior que zero');
+  if (!Number.isInteger(d.tempoPreparoMin) || d.tempoPreparoMin < 1) throw new ValidationError('O tempo de preparo deve ser um inteiro de minutos maior que zero');
   const resultado = {
     nome: validarNome(d.nome),
     codigo: textoOpcional(d.codigo, CODIGO_MAX, 'O código'),
     categoriaId: d.categoriaId,
     descricao: textoOpcional(d.descricao, DESCRICAO_MAX, 'A descrição'),
     precoCents: d.precoCents,
+    tempoPreparoMin: d.tempoPreparoMin,
     ativo: booleano(d.ativo, 'ativo'),
   };
   if (body?.ingredientes !== undefined) resultado.ingredientes = validarIngredientes(body.ingredientes);
   else if (atual === PRATO_PADRAO) resultado.ingredientes = [];
+  if (resultado.ingredientes && resultado.ingredientes.length === 0) throw new ValidationError('O prato precisa de pelo menos um ingrediente');
   return resultado;
 }
 

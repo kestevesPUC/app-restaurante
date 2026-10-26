@@ -13,6 +13,7 @@ module.exports = {
   appId: 'br.com.pdvrestaurante.app',
   productName: 'PDV Restaurante',
   // Lista PERMITIDA (nada além disto entra no instalador): evita empacotar .env, dados, docs e testes.
+  // A sessão do WhatsApp (whatsapp-session) fica em userData, fora do instalador; o Chromium NÃO é empacotado (usa-se o Edge instalado).
   // As dependências de produção (node_modules) são incluídas automaticamente pelo electron-builder.
   files: ['electron-main.js', 'package.json', 'public/**/*', 'src/**/*'],
   directories: { output: 'dist' },

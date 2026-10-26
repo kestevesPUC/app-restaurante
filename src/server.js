@@ -1,13 +1,22 @@
 'use strict';
 const path = require('node:path');
 const { buildApplication } = require('./compositionRoot');
+const JsonLineLogger = require('./infrastructure/logging/JsonLineLogger');
 
 const HOST = '127.0.0.1';
+
+/** Desenvolvimento: grava no arquivo (JSON) e mantém a saída no console. */
+function criarLogger() {
+  const arquivo = new JsonLineLogger({ pasta: process.env.PDV_LOGS || path.join(__dirname, '..', 'data', 'logs'), relogio: Date.now });
+  const duplo = (nivel) => (...args) => { arquivo[nivel](...args); console[nivel === 'debug' ? 'log' : nivel](...args); };
+  return { debug: duplo('debug'), info: duplo('info'), warn: duplo('warn'), error: duplo('error'), fechar: () => arquivo.fechar() };
+}
 
 async function main() {
   const dbPath = process.env.PDV_DB || path.join(__dirname, '..', 'data', 'pdv.sqlite');
   const port = Number(process.env.PORT) || 3000;
-  const app = buildApplication({ dbPath });
+  const logger = criarLogger();
+  const app = buildApplication({ dbPath, logger });
 
   const inicial = app.services.adminBootstrap.run();
   if (inicial) console.log(`Usuário inicial criado: ADMIN / ${inicial.senhaProvisoria}  (troca obrigatória no 1º acesso)`);
@@ -15,7 +24,8 @@ async function main() {
   const { port: ouvindo } = await app.server.listen(port, HOST);
   console.log(`PDV Restaurante em http://localhost:${ouvindo}  (banco: ${dbPath})`);
 
-  const encerrar = () => app.close().finally(() => process.exit(0));
+  logger.info('aplicativo iniciado', { porta: ouvindo });
+  const encerrar = () => app.close().finally(() => { logger.info('aplicativo encerrado'); logger.fechar().finally(() => process.exit(0)); });
   process.on('SIGINT', encerrar);
   process.on('SIGTERM', encerrar);
 }

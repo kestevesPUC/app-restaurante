@@ -3,6 +3,7 @@ import { esc } from './format.js';
 import { icon } from './icons.js';
 import { restoreTheme, themeButton, wireThemeButtons } from './theme.js';
 import { state } from './state.js';
+import { montarTitulo } from './titulo.js';
 import { notify, fail } from './ui.js';
 import { ROTAS, menuPara, nivelNome, podeAcessar, rotaInicial } from './niveis.js';
 import { conectar } from './events.js';
@@ -65,6 +66,11 @@ function voltarAoLogin(erro = '') {
   renderLogin(root, entrarCom, erro);
 }
 
+function atualizarTitulo() {
+  const app = state.tituloApp || 'PDV Restaurante';
+  document.title = state.rotuloAtual ? `${state.rotuloAtual} — ${app}` : app;
+}
+
 /** Mostra a tela da rota atual, respeitando o nível do usuário. */
 function mostrar() {
   const { me } = state;
@@ -80,14 +86,25 @@ function mostrar() {
   });
   document.getElementById('ptitle').textContent = rota.rotulo;
   document.getElementById('psub').textContent = rota.subtitulo;
-  document.title = `${rota.rotulo} — PDV Restaurante`;
+  state.rotuloAtual = rota.rotulo;
+  atualizarTitulo();
   notify('');
   document.getElementById('view').innerHTML = '';
   VIEWS[id]().catch(fail);
 }
 
+/** Nome e versão do sistema (mesmo texto da janela do desktop): "PDV Restaurante — v0.1.0". */
+function carregarTitulo() {
+  if (state.tituloApp) return;
+  api.get('/api/sistema').then(({ nome, versao }) => {
+    state.tituloApp = montarTitulo(nome, versao);
+    atualizarTitulo();
+  }).catch(() => {});
+}
+
 function entrarCom(me) {
   state.me = me;
+  carregarTitulo();
   if (me.mustChange) {
     renderTrocaSenha(root, async () => {
       // A troca reemite o cookie da sessão: segue logado, só atualiza os dados do usuário.
@@ -100,6 +117,7 @@ function entrarCom(me) {
 }
 
 function iniciar() {
+  carregarTitulo(); // repete se a 1ª tentativa falhou (ex.: senha provisória pendente)
   renderShell();
   eventos?.fechar();
   eventos = conectar((tipo, dados) => window.dispatchEvent(new CustomEvent('pdv:evento', { detail: { tipo, dados } })));

@@ -27,10 +27,17 @@ class EventController {
     };
     write(': conectado\n\n');
 
-    // O nível C recebe apenas eventos da cozinha.
+    // A: tudo. B: tudo, exceto o QR do WhatsApp. C: somente `pedido` (id e status).
     const unsubscribe = this.bus.subscribe(({ tipo, dados }) => {
-      if (user.nivel === 'C' && tipo !== 'cozinha') return;
-      write(`event: ${tipo}\ndata: ${JSON.stringify(dados)}\n\n`);
+      let payload = dados;
+      if (user.nivel === 'C') {
+        if (tipo !== 'pedido') return;
+        payload = { id: dados.id, status: dados.status };
+      } else if (user.nivel === 'B' && tipo === 'whatsapp' && dados && 'qr' in dados) {
+        payload = { ...dados };
+        delete payload.qr;
+      }
+      write(`event: ${tipo}\ndata: ${JSON.stringify(payload)}\n\n`);
     });
     const heartbeat = setInterval(() => write(': batimento\n\n'), this.heartbeatMs);
     heartbeat.unref();

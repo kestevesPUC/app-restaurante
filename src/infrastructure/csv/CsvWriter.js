@@ -1,7 +1,8 @@
 'use strict';
 
+const textoSeguro = require('./textoSeguro');
+
 const BOM = '﻿';
-const FORMULA_START = /^[=+\-@\t\r]/;
 
 /**
  * Gera CSV compatível com Excel pt-BR: UTF-8 com BOM, separador ";", decimais com vírgula, datas dd/mm/aaaa.
@@ -32,7 +33,7 @@ class CsvWriter {
 
   /** Aspas quando necessário e neutralização de "injeção de fórmula" (=, +, -, @) em planilhas. */
   #quote(text) {
-    const safe = FORMULA_START.test(text) ? `'${text}` : text;
+    const safe = textoSeguro(text);
     return /[";\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
   }
 }

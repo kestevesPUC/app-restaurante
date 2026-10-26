@@ -6,6 +6,8 @@ ao cliente pelo WhatsApp quando a mesa fica livre. A cozinha acompanha os pedido
 
 Uso exclusivo dos funcionários: não há acesso do cliente ao sistema.
 
+> **Escopo atual (2026-10-26):** o projeto passou a seguir o escopo de lanchonete descrito em [superpowers/specs/2026-10-26-lanchonete-design.md](superpowers/specs/2026-10-26-lanchonete-design.md), implementado pelo plano [Parte 3](superpowers/plans/2026-10-26-pdv-parte-3-escopo-lanchonete.md). Onde este índice e os documentos abaixo divergirem desse design, vale o design. Mesas, fila de espera, PIX e maquininha ficam para uma fase posterior.
+>
 > **Situação:** planejamento. Nenhum código foi escrito ainda. Os pontos em aberto estão em [Roadmap → Pendências](roadmap.md#pendências).
 > Tudo que estiver marcado como **(proposta)** foi decisão do arquiteto e ainda precisa ser validado pelo dono do produto.
 

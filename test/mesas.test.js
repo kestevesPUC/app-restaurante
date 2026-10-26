@@ -4,14 +4,10 @@ const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
 
 let app;
-let comandaAberta;
 let eventos;
 beforeEach(async () => {
-  comandaAberta = new Set();
   eventos = [];
   app = await createTestApp();
-  // Troca a porta da comanda por uma função falsa (a Tarefa 11 liga ao repositório de pedidos).
-  app.app.services.mesas.comandaNaoPagaDaMesa = (id) => comandaAberta.has(id);
   app.bus.subscribe((e) => { if (e.tipo === 'mesa') eventos.push(e.dados); });
 });
 afterEach(async () => { await app.close(); });
@@ -27,17 +23,13 @@ test('cria mesa LIVRE e ativa por padrão', async () => {
   assert.equal(res.body.ativo, true);
 });
 
-test('liberar mesa com comanda não paga → 409', async () => {
-  const m = await nova();
-  await app.request('POST', `/api/mesas/${m.id}/ocupar`, { user: 'ATEND' });
-  comandaAberta.add(m.id);
-  const res = await app.request('POST', `/api/mesas/${m.id}/liberar`, { user: 'ATEND' });
-  assert.equal(res.status, 409);
+test('listagem de mesas é só o cadastro (sem pedidoAberto)', async () => {
+  await nova();
   const lista = await app.request('GET', '/api/mesas', { user: 'ATEND' });
-  assert.equal(lista.body[0].situacao, 'OCUPADA');
+  assert.deepEqual(Object.keys(lista.body[0]).sort(), ['ativo', 'capacidade', 'id', 'numero', 'situacao']);
 });
 
-test('liberar mesa sem comanda aberta → LIVRE', async () => {
+test('liberar mesa ocupada → LIVRE', async () => {
   const m = await nova();
   await app.request('POST', `/api/mesas/${m.id}/ocupar`, { user: 'ATEND' });
   const res = await app.request('POST', `/api/mesas/${m.id}/liberar`, { user: 'ATEND' });

@@ -1,22 +1,22 @@
 'use strict';
 const { normalizarNome } = require('../../domain/cardapio/validators');
 
-const COLUNAS_PEDIDO = `p.id, p.data_local, p.numero_dia, p.tipo, p.mesa_id, m.numero AS mesa_numero, p.cliente_nome, p.situacao,
-  p.subtotal_cents, p.desconto_cents, p.total_cents, p.observacao, p.criado_por, u.usuario AS atendente, p.criado_em,
-  p.finalizado_em, p.pago_em, p.cancelado_em, p.cancelado_por, p.motivo_cancelamento,
-  (SELECT COALESCE(SUM(i.quantidade), 0) FROM pedido_itens i WHERE i.pedido_id = p.id AND i.cancelado_em IS NULL) AS qtd_itens`;
-const FROM_PEDIDO = 'FROM pedidos p LEFT JOIN mesas m ON m.id = p.mesa_id LEFT JOIN usuarios u ON u.id = p.criado_por';
+const COLUNAS_PEDIDO = `p.id, p.data_local, p.tipo, p.status, p.cliente_id, p.cliente_nome, p.cliente_telefone, p.tempo_estimado_min,
+  p.confirmado_em, p.subtotal_cents, p.desconto_cents, p.total_cents, p.observacao, p.criado_por, p.criado_em,
+  p.cancelado_em, p.cancelado_por, p.motivo_cancelamento`;
 
 /** Colunas de `pedidos` que o serviço pode alterar (camelCase → snake_case). */
 const ATUALIZAVEIS = {
-  mesaId: 'mesa_id', clienteNome: 'cliente_nome', observacao: 'observacao', situacao: 'situacao',
+  status: 'status', clienteId: 'cliente_id', clienteNome: 'cliente_nome', clienteTelefone: 'cliente_telefone',
+  tempoEstimadoMin: 'tempo_estimado_min', confirmadoEm: 'confirmado_em', observacao: 'observacao',
   subtotalCents: 'subtotal_cents', descontoCents: 'desconto_cents', totalCents: 'total_cents',
-  finalizadoEm: 'finalizado_em', pagoEm: 'pago_em', canceladoEm: 'cancelado_em', canceladoPor: 'cancelado_por', motivoCancelamento: 'motivo_cancelamento',
+  canceladoEm: 'cancelado_em', canceladoPor: 'cancelado_por', motivoCancelamento: 'motivo_cancelamento',
 };
 
 const escaparLike = (texto) => texto.replace(/[\\%_]/g, (c) => `\\${c}`);
+const marcas = (lista) => lista.map(() => '?').join(',');
 
-/** Persistência dos pedidos, rodadas (`pedido_envios`), itens e modificações (retrato do cardápio, RN-06). */
+/** Persistência dos pedidos, itens (retrato de prato/bebida), modificações e histórico de status. */
 class PedidoRepository {
   /** @param {import('../database/SqliteDatabase')} db */
   constructor(db) {
@@ -27,33 +27,21 @@ class PedidoRepository {
 
   #pedido(row) {
     return row && {
-      id: row.id, dataLocal: row.data_local, numeroDia: row.numero_dia, tipo: row.tipo, mesaId: row.mesa_id, mesaNumero: row.mesa_numero ?? null,
-      clienteNome: row.cliente_nome, situacao: row.situacao, subtotalCents: row.subtotal_cents, descontoCents: row.desconto_cents,
-      totalCents: row.total_cents, observacao: row.observacao, criadoPor: row.criado_por, atendente: row.atendente ?? null, criadoEm: row.criado_em,
-      finalizadoEm: row.finalizado_em, pagoEm: row.pago_em, canceladoEm: row.cancelado_em, canceladoPor: row.cancelado_por,
-      motivoCancelamento: row.motivo_cancelamento, qtdItens: row.qtd_itens, forma: null,
-    };
-  }
-
-  #envio(row) {
-    return row && {
-      id: row.id, pedidoId: row.pedido_id, rodada: row.rodada, cozinhaSituacao: row.cozinha_situacao, vaiParaCozinha: !!row.vai_para_cozinha,
-      enviadoEm: row.enviado_em, enviadoPor: row.enviado_por, preparoIniciadoEm: row.preparo_iniciado_em, prontoEm: row.pronto_em, entregueEm: row.entregue_em,
+      id: row.id, dataLocal: row.data_local, tipo: row.tipo, status: row.status, clienteId: row.cliente_id, clienteNome: row.cliente_nome,
+      clienteTelefone: row.cliente_telefone, tempoEstimadoMin: row.tempo_estimado_min, confirmadoEm: row.confirmado_em,
+      subtotalCents: row.subtotal_cents, descontoCents: row.desconto_cents, totalCents: row.total_cents, observacao: row.observacao,
+      criadoPor: row.criado_por, criadoEm: row.criado_em, canceladoEm: row.cancelado_em, canceladoPor: row.cancelado_por,
+      motivoCancelamento: row.motivo_cancelamento,
     };
   }
 
   findById(id) {
-    return this.#pedido(this.db.prepare(`SELECT ${COLUNAS_PEDIDO} ${FROM_PEDIDO} WHERE p.id = ?`).get(Number(id)));
+    return this.#pedido(this.db.prepare(`SELECT ${COLUNAS_PEDIDO} FROM pedidos p WHERE p.id = ?`).get(Number(id)));
   }
 
-  /** Próximo número do dia; chamar dentro da mesma transação da inserção. */
-  proximoNumero(dataLocal) {
-    return this.db.prepare('SELECT COALESCE(MAX(numero_dia), 0) + 1 AS n FROM pedidos WHERE data_local = ?').get(dataLocal).n;
-  }
-
-  insert({ dataLocal, numeroDia, tipo, mesaId, clienteNome, observacao, criadoPor, criadoEm }) {
-    const { lastInsertRowid } = this.db.prepare(`INSERT INTO pedidos (data_local, numero_dia, tipo, mesa_id, cliente_nome, observacao, criado_por, criado_em)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(dataLocal, numeroDia, tipo, mesaId ?? null, clienteNome ?? null, observacao ?? null, criadoPor, criadoEm);
+  insert({ dataLocal, clienteNome, clienteTelefone, observacao, criadoPor, criadoEm }) {
+    const { lastInsertRowid } = this.db.prepare(`INSERT INTO pedidos (data_local, tipo, status, cliente_nome, cliente_telefone, observacao, criado_por, criado_em)
+      VALUES (?, 'BALCAO', 'ABERTO', ?, ?, ?, ?, ?)`).run(dataLocal, clienteNome ?? null, clienteTelefone ?? null, observacao ?? null, criadoPor, criadoEm);
     return Number(lastInsertRowid);
   }
 
@@ -64,11 +52,12 @@ class PedidoRepository {
     this.db.prepare(`UPDATE pedidos SET ${sets} WHERE id = ?`).run(...chaves.map((k) => campos[k] ?? null), Number(id));
   }
 
-  /** Grava um item com o retrato do prato e das modificações. */
+  /** Grava um item com o retrato do prato/bebida e das modificações. */
   insertItem(pedidoId, item, ordem) {
     const { lastInsertRowid } = this.db.prepare(`INSERT INTO pedido_itens
-      (pedido_id, prato_id, prato_nome, preco_unit_cents, adicionais_cents, quantidade, total_cents, observacao, ordem)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(Number(pedidoId), item.pratoId, item.pratoNome, item.precoUnitCents, item.adicionaisCents,
+      (pedido_id, item_tipo, prato_id, bebida_id, item_nome, tempo_preparo_min, preco_unit_cents, adicionais_cents, quantidade, total_cents, observacao, ordem)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(Number(pedidoId), item.tipo, item.tipo === 'PRATO' ? item.itemId : null,
+      item.tipo === 'BEBIDA' ? item.itemId : null, item.nome, item.tempoPreparoMin, item.precoUnitCents, item.adicionaisCents,
       item.quantidade, item.totalCents, item.observacao ?? null, ordem);
     const itemId = Number(lastInsertRowid);
     const insere = this.db.prepare(`INSERT INTO item_modificacoes (item_id, ingrediente_id, ingrediente_nome, tipo, quantidade, preco_unit_cents)
@@ -77,91 +66,82 @@ class PedidoRepository {
     return itemId;
   }
 
-  proximaOrdem(pedidoId) {
-    return this.db.prepare('SELECT COALESCE(MAX(ordem), -1) + 1 AS o FROM pedido_itens WHERE pedido_id = ?').get(Number(pedidoId)).o;
+  removerItens(pedidoId) {
+    this.db.prepare('DELETE FROM pedido_itens WHERE pedido_id = ?').run(Number(pedidoId));
   }
 
-  removerPendentes(pedidoId) {
-    this.db.prepare('DELETE FROM pedido_itens WHERE pedido_id = ? AND envio_id IS NULL').run(Number(pedidoId));
+  /** Itens de vários pedidos de uma vez: Map(pedidoId → itens). */
+  itensDe(pedidoIds) {
+    const porPedido = new Map(pedidoIds.map((id) => [id, []]));
+    if (!pedidoIds.length) return porPedido;
+    const rows = this.db.prepare(`SELECT * FROM pedido_itens WHERE pedido_id IN (${marcas(pedidoIds)}) ORDER BY pedido_id, ordem, id`).all(...pedidoIds);
+    const mods = this.db.prepare(`SELECT im.* FROM item_modificacoes im JOIN pedido_itens i ON i.id = im.item_id
+      WHERE i.pedido_id IN (${marcas(pedidoIds)}) ORDER BY im.id`).all(...pedidoIds);
+    const modsPorItem = new Map();
+    for (const m of mods) {
+      if (!modsPorItem.has(m.item_id)) modsPorItem.set(m.item_id, []);
+      modsPorItem.get(m.item_id).push({
+        id: m.id, ingredienteId: m.ingrediente_id, ingredienteNome: m.ingrediente_nome, tipo: m.tipo, quantidade: m.quantidade, precoUnitCents: m.preco_unit_cents,
+      });
+    }
+    for (const r of rows) {
+      porPedido.get(r.pedido_id).push({
+        id: r.id, tipo: r.item_tipo, itemId: r.item_tipo === 'PRATO' ? r.prato_id : r.bebida_id, nome: r.item_nome,
+        precoUnitCents: r.preco_unit_cents, adicionaisCents: r.adicionais_cents, quantidade: r.quantidade, totalCents: r.total_cents,
+        observacao: r.observacao, tempoPreparoMin: r.tempo_preparo_min, modificacoes: modsPorItem.get(r.id) ?? [],
+      });
+    }
+    return porPedido;
   }
 
   itens(pedidoId) {
-    const rows = this.db.prepare('SELECT * FROM pedido_itens WHERE pedido_id = ? ORDER BY ordem, id').all(Number(pedidoId));
-    const mods = this.db.prepare(`SELECT im.* FROM item_modificacoes im JOIN pedido_itens i ON i.id = im.item_id
-      WHERE i.pedido_id = ? ORDER BY im.id`).all(Number(pedidoId));
-    return rows.map((r) => ({
-      id: r.id, pedidoId: r.pedido_id, envioId: r.envio_id, pratoId: r.prato_id, pratoNome: r.prato_nome, precoUnitCents: r.preco_unit_cents,
-      adicionaisCents: r.adicionais_cents, quantidade: r.quantidade, totalCents: r.total_cents, observacao: r.observacao, ordem: r.ordem,
-      canceladoEm: r.cancelado_em, canceladoPor: r.cancelado_por, motivoCancelamento: r.motivo_cancelamento, cancelado: r.cancelado_em !== null,
-      modificacoes: mods.filter((m) => m.item_id === r.id).map((m) => ({
-        id: m.id, ingredienteId: m.ingrediente_id, ingredienteNome: m.ingrediente_nome, tipo: m.tipo, quantidade: m.quantidade, precoUnitCents: m.preco_unit_cents,
-      })),
-    }));
+    return this.itensDe([Number(pedidoId)]).get(Number(pedidoId));
   }
 
-  cancelarItem(itemId, { canceladoEm, canceladoPor, motivo }) {
-    this.db.prepare('UPDATE pedido_itens SET cancelado_em = ?, cancelado_por = ?, motivo_cancelamento = ? WHERE id = ?')
-      .run(canceladoEm, canceladoPor, motivo, Number(itemId));
+  /** Registra uma mudança de status (dentro da transação do chamador). */
+  registrarHistorico(pedidoId, { de, para, actor, em }) {
+    this.db.prepare(`INSERT INTO pedido_status_historico (pedido_id, status_anterior, status_novo, usuario_id, usuario, em)
+      VALUES (?, ?, ?, ?, ?, ?)`).run(Number(pedidoId), de, para, actor?.id ?? null, actor?.usuario ?? null, em);
   }
 
-  envios(pedidoId) {
-    return this.db.prepare('SELECT * FROM pedido_envios WHERE pedido_id = ? ORDER BY rodada').all(Number(pedidoId)).map((r) => this.#envio(r));
-  }
-
-  /** Itens pendentes (sem rodada, não cancelados) com o `vai_para_cozinha` da categoria atual do prato. */
-  pendentesParaEnvio(pedidoId) {
-    return this.db.prepare(`SELECT i.id, c.vai_para_cozinha FROM pedido_itens i JOIN pratos pr ON pr.id = i.prato_id
-      JOIN categorias c ON c.id = pr.categoria_id WHERE i.pedido_id = ? AND i.envio_id IS NULL AND i.cancelado_em IS NULL`).all(Number(pedidoId));
-  }
-
-  /** Cria a rodada N+1 e liga a ela os itens pendentes. */
-  criarEnvio(pedidoId, { vaiParaCozinha, enviadoEm, enviadoPor }) {
-    const rodada = this.db.prepare('SELECT COALESCE(MAX(rodada), 0) + 1 AS r FROM pedido_envios WHERE pedido_id = ?').get(Number(pedidoId)).r;
-    const { lastInsertRowid } = this.db.prepare(`INSERT INTO pedido_envios (pedido_id, rodada, cozinha_situacao, vai_para_cozinha, enviado_em, enviado_por)
-      VALUES (?, ?, 'NA_FILA', ?, ?, ?)`).run(Number(pedidoId), rodada, vaiParaCozinha ? 1 : 0, enviadoEm, enviadoPor ?? null);
-    const envioId = Number(lastInsertRowid);
-    this.db.prepare('UPDATE pedido_itens SET envio_id = ? WHERE pedido_id = ? AND envio_id IS NULL AND cancelado_em IS NULL').run(envioId, Number(pedidoId));
-    return this.#envio(this.db.prepare('SELECT * FROM pedido_envios WHERE id = ?').get(envioId));
-  }
-
-  /** Resumo da cozinha por pedido: `{ rodadas, entregues, situacao }` (situação da rodada mais atrasada). */
-  resumosCozinha(pedidoIds) {
-    const resumos = new Map();
-    if (!pedidoIds.length) return resumos;
-    const marcas = pedidoIds.map(() => '?').join(',');
-    const ordem = ['NA_FILA', 'EM_PREPARO', 'PRONTO', 'ENTREGUE'];
-    const linhas = this.db.prepare(`SELECT pedido_id, COUNT(*) AS rodadas, SUM(cozinha_situacao = 'ENTREGUE') AS entregues,
-      MIN(CASE cozinha_situacao WHEN 'NA_FILA' THEN 0 WHEN 'EM_PREPARO' THEN 1 WHEN 'PRONTO' THEN 2 ELSE 3 END) AS pior
-      FROM pedido_envios WHERE vai_para_cozinha = 1 AND pedido_id IN (${marcas}) GROUP BY pedido_id`).all(...pedidoIds);
-    for (const r of linhas) resumos.set(r.pedido_id, { rodadas: r.rodadas, entregues: r.entregues, situacao: ordem[r.pior] });
-    return resumos;
-  }
-
-  /** Comanda de mesa ainda não paga (ABERTO ou AGUARDANDO_PAGAMENTO), ou null. */
-  comandaNaoPagaDaMesa(mesaId) {
-    const row = this.db.prepare(`SELECT id FROM pedidos WHERE mesa_id = ? AND tipo = 'MESA'
-      AND situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO')`).get(Number(mesaId));
-    return row ? row.id : null;
+  /** Histórico de vários pedidos: Map(pedidoId → [{ de, para, usuario, em }]) em ordem cronológica. */
+  historicoDe(pedidoIds) {
+    const porPedido = new Map(pedidoIds.map((id) => [id, []]));
+    if (!pedidoIds.length) return porPedido;
+    const rows = this.db.prepare(`SELECT * FROM pedido_status_historico WHERE pedido_id IN (${marcas(pedidoIds)}) ORDER BY em, id`).all(...pedidoIds);
+    for (const r of rows) porPedido.get(r.pedido_id).push({ de: r.status_anterior, para: r.status_novo, usuario: r.usuario, em: r.em });
+    return porPedido;
   }
 
   pratoJaPedido(pratoId) {
     return !!this.db.prepare('SELECT 1 FROM pedido_itens WHERE prato_id = ? LIMIT 1').get(Number(pratoId));
   }
 
-  /** Lista por id crescente; `de`/`ate` sobre `data_local`; `q` = número do dia ou parte do nome do cliente. */
-  listar({ de, ate, situacao, mesaId, atendenteId, q }) {
+  /**
+   * Lista por id crescente; `de`/`ate` sobre `data_local`. `q`: número exato do pedido, parte do nome (sem acento/maiúsculas)
+   * ou dígitos do telefone nacional (`digitos`, já sem o +55).
+   */
+  listar({ de, ate, status, q, digitos, limite }) {
     const where = ['p.data_local BETWEEN ? AND ?'];
     const params = [de, ate];
-    if (situacao) { where.push('p.situacao = ?'); params.push(situacao); }
-    if (mesaId) { where.push('p.mesa_id = ?'); params.push(Number(mesaId)); }
-    if (atendenteId) { where.push('p.criado_por = ?'); params.push(Number(atendenteId)); }
+    if (status) { where.push('p.status = ?'); params.push(status); }
     const termo = typeof q === 'string' ? q.trim() : '';
     if (termo) {
-      const numero = /^\d+$/.test(termo) ? Number(termo) : -1;
-      where.push("(p.numero_dia = ? OR sem_acento(p.cliente_nome) LIKE ? ESCAPE '\\')");
-      params.push(numero, `%${escaparLike(normalizarNome(termo))}%`);
+      const ou = ["sem_acento(p.cliente_nome) LIKE ? ESCAPE '\\'"];
+      params.push(`%${escaparLike(normalizarNome(termo))}%`);
+      if (/^\d+$/.test(termo)) { ou.push('p.id = ?'); params.push(Number(termo)); }
+      if (digitos) { ou.push("substr(p.cliente_telefone, 4) LIKE ? ESCAPE '\\'"); params.push(`%${escaparLike(digitos)}%`); }
+      where.push(`(${ou.join(' OR ')})`);
     }
-    return this.db.prepare(`SELECT ${COLUNAS_PEDIDO} ${FROM_PEDIDO} WHERE ${where.join(' AND ')} ORDER BY p.id ASC`).all(...params)
+    params.push(limite);
+    return this.db.prepare(`SELECT ${COLUNAS_PEDIDO} FROM pedidos p WHERE ${where.join(' AND ')} ORDER BY p.id ASC LIMIT ?`).all(...params)
+      .map((r) => this.#pedido(r));
+  }
+
+  /** Pedidos ativos na cozinha (RECEBIDO, EM_PREPARO, PRONTO_*), por confirmação e id. */
+  listarCozinha() {
+    return this.db.prepare(`SELECT ${COLUNAS_PEDIDO} FROM pedidos p
+      WHERE p.status IN ('RECEBIDO','EM_PREPARO','PRONTO_RETIRADA','PRONTO_ENTREGA') ORDER BY p.confirmado_em ASC, p.id ASC`).all()
       .map((r) => this.#pedido(r));
   }
 }

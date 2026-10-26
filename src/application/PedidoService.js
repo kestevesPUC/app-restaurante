@@ -3,23 +3,17 @@ const NotFoundError = require('../domain/errors/NotFoundError');
 const ConflictError = require('../domain/errors/ConflictError');
 const ValidationError = require('../domain/errors/ValidationError');
 const ForbiddenError = require('../domain/errors/ForbiddenError');
-const { validarIdentificacao, OBSERVACAO_MAX } = require('../domain/pedido/ItemValidator');
-const { calcularPedido, centavos } = require('../domain/pedido/calculos');
-const { podeTransitar } = require('../domain/pedido/situacoes');
+const { OBSERVACAO_MAX } = require('../domain/pedido/ItemValidator');
+const { calcularPedido } = require('../domain/pedido/calculos');
+const { podeTransitar, podeMudarStatus } = require('../domain/pedido/status');
+const { estimarPreparo } = require('../domain/pedido/estimativa');
+const { normalizarTelefone } = require('../domain/phone');
+const { dataLocalDe } = require('./ConsultaDePedidos');
 
 const MOTIVO_MAX = 200;
-const LIMITE_LISTA = 1000;
+const CLIENTE_NOME_MAX = 80;
 const NIVEIS_PEDIDO = ['A', 'B'];
-const NAO_PAGOS = ['ABERTO', 'AGUARDANDO_PAGAMENTO'];
-
-const ehComandaDuplicada = (error) => /UNIQUE/i.test(error?.message || '') && /pedidos\.mesa_id/i.test(error?.message || '');
-
-/** Data local AAAA-MM-DD do instante `ms`. */
-function dataLocalDe(ms) {
-  const d = new Date(ms);
-  const dois = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}`;
-}
+const ALVOS_MUDAR_STATUS = ['EM_PREPARO', 'PRONTO_RETIRADA', 'PRONTO_ENTREGA', 'FINALIZADO'];
 
 function motivoDe(valor) {
   const texto = typeof valor === 'string' ? valor.trim() : '';
@@ -36,283 +30,172 @@ function observacaoDe(valor) {
   return texto || null;
 }
 
-/** Casos de uso do pedido (RN-05/RN-06): balcão e comanda de mesa, rodadas para a cozinha, finalizar, cancelar. */
+/** Cliente opcional do rascunho: nome 1–80 e telefone normalizado, cada um se informado. */
+function clienteDe(valor) {
+  if (valor === undefined || valor === null) return { clienteNome: null, clienteTelefone: null };
+  if (typeof valor !== 'object' || Array.isArray(valor)) throw new ValidationError('Os dados do cliente são inválidos');
+  const { nome, telefone } = valor;
+  if (nome !== undefined && nome !== null && typeof nome !== 'string') throw new ValidationError('O nome do cliente deve ser um texto');
+  const texto = typeof nome === 'string' ? nome.trim() : '';
+  if ([...texto].length > CLIENTE_NOME_MAX) throw new ValidationError(`O nome do cliente deve ter no máximo ${CLIENTE_NOME_MAX} caracteres`);
+  const vazio = telefone === undefined || telefone === null || (typeof telefone === 'string' && !telefone.trim());
+  return { clienteNome: texto || null, clienteTelefone: vazio ? null : normalizarTelefone(telefone) };
+}
+
+/**
+ * Casos de uso do pedido da lanchonete (design §4): rascunho, confirmar (baixa de estoque, cliente), reabrir, cancelar e
+ * status operacional. Escritas em uma transação; eventos `estoque`/`pedido` e a porta `aposMudarStatus` só depois do commit.
+ */
 class PedidoService {
   /**
    * @param {object} deps
    * @param {import('../infrastructure/database/SqliteDatabase')} deps.db
    * @param {import('../infrastructure/repositories/PedidoRepository')} deps.repository
    * @param {import('./MontadorDeItens')} deps.montador
-   * @param {import('../infrastructure/repositories/MesaRepository')} deps.mesaRepository
-   * @param {import('./MesaService')} deps.mesas
+   * @param {import('./ConsultaDePedidos')} deps.consulta
+   * @param {import('./EstoqueService')} deps.estoque
+   * @param {import('./ClienteService')} deps.clientes
    * @param {import('./ConfigService')} deps.config
    * @param {import('./AuditTrail')} deps.audit
    * @param {import('../infrastructure/events/EventBus')} [deps.bus]
    * @param {() => number} [deps.relogio] "agora" em ms
-   * @param {(pedidoId:number) => boolean} [deps.temPagamentoPendente] porta ligada aos pagamentos (Tarefa 17)
+   * @param {(pedido:object, user:object) => void} [deps.aposMudarStatus] porta pós-commit (WhatsApp, Tarefa 8)
+   * @param {Pick<Console,'error'>} [deps.logger]
    */
-  constructor({ db, repository, montador, mesaRepository, mesas, config, audit, bus = null, relogio = Date.now, temPagamentoPendente = () => false }) {
-    Object.assign(this, { db, repository, montador, mesaRepository, mesas, config, audit, bus, relogio, temPagamentoPendente });
+  constructor({
+    db, repository, montador, consulta, estoque, clientes, config, audit, bus = null, relogio = Date.now, aposMudarStatus = () => {}, logger = console,
+  }) {
+    Object.assign(this, { db, repository, montador, consulta, estoque, clientes, config, audit, bus, relogio, aposMudarStatus, logger });
   }
 
-  criar(user, body = {}) {
+  criarRascunho(user, body = {}) {
     this.#exigirAtendente(user);
-    const ident = validarIdentificacao(body);
+    const cliente = clienteDe(body.cliente);
     const observacao = observacaoDe(body.observacao);
     const itens = this.montador.montar(body.itens);
-    const { resultado: id, eventosMesa } = this.#escreverComMesas((eventos) => {
-      if (ident.tipo === 'MESA') this.#exigirMesaDisponivel(ident.mesaId);
+    const id = this.db.transaction(() => {
       const agora = this.relogio();
-      const dataLocal = dataLocalDe(agora);
       const pedidoId = this.repository.insert({
-        ...ident, observacao, dataLocal, numeroDia: this.repository.proximoNumero(dataLocal), criadoPor: user.id, criadoEm: new Date(agora).toISOString(),
+        ...cliente, observacao, dataLocal: dataLocalDe(agora), criadoPor: user.id, criadoEm: new Date(agora).toISOString(),
       });
-      this.#inserirItens(pedidoId, itens);
-      this.#recalcular(pedidoId);
-      if (ident.tipo === 'MESA') this.#ocuparSeNecessario(user, ident.mesaId, eventos);
+      this.#gravarItens(pedidoId, itens);
       const criado = this.repository.findById(pedidoId);
       this.#log(user, 'criar', criado, 'criado', null, criado);
       return pedidoId;
     });
-    return this.#publicar(id, eventosMesa);
+    return this.#publicar(id);
   }
 
-  adicionarItens(user, pedidoId, entradas) {
+  atualizarRascunho(user, id, body = {}) {
     this.#exigirAtendente(user);
-    const itens = this.montador.montar(entradas, { exigirAoMenosUm: true });
-    this.#escrever(() => {
-      const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
-      this.#inserirItens(antes.id, itens);
-      this.#recalcular(antes.id);
-      this.#log(user, 'alterar', antes, 'recebeu itens', antes, this.repository.findById(antes.id));
-    });
-    return this.#publicar(pedidoId);
-  }
-
-  substituirPendentes(user, pedidoId, body = {}) {
-    this.#exigirAtendente(user);
-    const itens = this.montador.montar(body.itens);
-    const { eventosMesa } = this.#escreverComMesas((eventos) => {
-      const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
-      const campos = {};
-      if (body.observacao !== undefined) campos.observacao = observacaoDe(body.observacao);
-      if (body.clienteNome !== undefined || (antes.tipo === 'MESA' && body.mesaId !== undefined)) {
-        const ident = validarIdentificacao({
-          tipo: antes.tipo, mesaId: body.mesaId ?? antes.mesaId, clienteNome: body.clienteNome !== undefined ? body.clienteNome : antes.clienteNome,
-        });
-        campos.clienteNome = ident.clienteNome;
-        if (antes.tipo === 'MESA' && ident.mesaId !== antes.mesaId) this.#moverComanda(user, antes, ident.mesaId, eventos);
-      }
+    const campos = {};
+    if (body.cliente !== undefined) Object.assign(campos, clienteDe(body.cliente));
+    if (body.observacao !== undefined) campos.observacao = observacaoDe(body.observacao);
+    const itens = body.itens === undefined ? null : this.montador.montar(body.itens);
+    this.db.transaction(() => {
+      const antes = this.#exigirStatus(id, 'ABERTO', 'Só pedidos em rascunho podem ser editados');
       this.repository.update(antes.id, campos);
-      this.repository.removerPendentes(antes.id);
-      this.#inserirItens(antes.id, itens);
-      this.#recalcular(antes.id);
+      if (itens) {
+        this.repository.removerItens(antes.id);
+        this.#gravarItens(antes.id, itens);
+      }
       this.#log(user, 'alterar', antes, 'alterado', antes, this.repository.findById(antes.id));
     });
-    return this.#publicar(pedidoId, eventosMesa);
+    return this.#publicar(Number(id));
   }
 
-  enviarCozinha(user, pedidoId) {
+  confirmar(user, id) {
     this.#exigirAtendente(user);
-    const envio = this.#escrever(() => {
-      const pedido = this.#exigirSituacao(pedidoId, ['ABERTO']);
-      return this.#enviar(user, pedido);
-    });
-    this.#publicar(pedidoId);
-    return envio;
-  }
-
-  cancelarItem(user, pedidoId, itemId, motivo) {
-    this.#exigirAtendente(user);
-    const texto = motivoDe(motivo);
-    this.#escrever(() => {
-      const antes = this.#exigirSituacao(pedidoId, NAO_PAGOS);
-      const item = this.repository.itens(antes.id).find((i) => i.id === Number(itemId));
-      if (!item) throw new NotFoundError('Item não encontrado');
-      if (item.cancelado) throw new ConflictError('O item já está cancelado');
-      if (item.envioId === null) throw new ValidationError('Item ainda não enviado: retire-o editando o pedido');
-      this.repository.cancelarItem(item.id, { canceladoEm: this.#agoraIso(), canceladoPor: user.id, motivo: texto });
-      this.#recalcular(antes.id);
-      this.audit.record({
-        actor: user, acao: 'cancelar_item', entidade: 'pedido', entidadeId: antes.id,
-        descricao: `Item "${item.pratoNome}" do pedido ${antes.numeroDia} cancelado: ${texto}`, antes: item, depois: this.repository.findById(antes.id),
-      });
-    });
-    return this.#publicar(pedidoId);
-  }
-
-  mover(user, pedidoId, mesaId) {
-    this.#exigirAtendente(user);
-    const { eventosMesa } = this.#escreverComMesas((eventos) => {
-      const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
-      if (antes.tipo !== 'MESA') throw new ConflictError('Só comandas de mesa podem ser movidas');
-      const destino = validarIdentificacao({ tipo: 'MESA', mesaId }).mesaId;
-      if (destino === antes.mesaId) return;
-      this.#moverComanda(user, antes, destino, eventos);
-    });
-    return this.#publicar(pedidoId, eventosMesa);
-  }
-
-  finalizar(user, pedidoId) {
-    this.#exigirAtendente(user);
-    this.#escrever(() => {
-      const antes = this.#exigirSituacao(pedidoId, ['ABERTO']);
+    return this.#transitar(user, id, 'RECEBIDO', 'confirmar', 'confirmado', (antes, eventos) => {
+      if (!antes.clienteNome || !antes.clienteTelefone) throw new ValidationError('Informe o nome e o telefone do cliente');
       const itens = this.repository.itens(antes.id);
-      const pendentes = itens.filter((i) => i.envioId === null && !i.cancelado);
-      if (antes.tipo === 'MESA' && pendentes.length) throw new ConflictError('Há itens não enviados à cozinha');
-      const totais = this.#recalcular(antes.id);
-      if (!itens.some((i) => !i.cancelado) || totais.totalCents === 0) throw new ValidationError('O pedido não tem itens a cobrar (total zero)');
-      if (antes.tipo === 'BALCAO' && pendentes.length && this.config.get('cozinha.enviar_em') === 'FINALIZADO') this.#enviar(user, antes);
-      this.repository.update(antes.id, { situacao: 'AGUARDANDO_PAGAMENTO', finalizadoEm: this.#agoraIso() });
-      this.#log(user, 'finalizar', antes, 'finalizado', antes, this.repository.findById(antes.id));
+      if (!itens.length) throw new ValidationError('Informe ao menos um item');
+      const cliente = this.clientes.registrar(user, { nome: antes.clienteNome, telefone: antes.clienteTelefone });
+      const bebidas = itens.filter((i) => i.tipo === 'BEBIDA').map((i) => ({ bebidaId: i.itemId, quantidade: i.quantidade }));
+      eventos.push(...this.estoque.baixarParaPedido(user, antes.id, bebidas));
+      return {
+        clienteId: cliente.id, clienteNome: cliente.nome, clienteTelefone: cliente.telefone,
+        tempoEstimadoMin: estimarPreparo(itens, this.config.get('cozinha.estimativa')), confirmadoEm: this.#agoraIso(),
+      };
     });
-    return this.#publicar(pedidoId);
   }
 
-  reabrir(user, pedidoId) {
+  reabrir(user, id) {
     this.#exigirAtendente(user);
-    this.#escrever(() => {
-      const antes = this.#exigirSituacao(pedidoId, ['AGUARDANDO_PAGAMENTO']);
-      if (this.temPagamentoPendente(antes.id)) throw new ConflictError('Há um pagamento em andamento para este pedido');
-      this.repository.update(antes.id, { situacao: 'ABERTO', finalizadoEm: null });
-      this.#log(user, 'reabrir', antes, 'reaberto', antes, this.repository.findById(antes.id));
+    return this.#transitar(user, id, 'ABERTO', 'reabrir', 'reaberto', (antes, eventos) => {
+      eventos.push(...this.estoque.estornarPedido(user, antes.id));
+      return { confirmadoEm: null, tempoEstimadoMin: 0 };
     });
-    return this.#publicar(pedidoId);
   }
 
-  cancelar(user, pedidoId, motivo) {
+  cancelar(user, id, motivo) {
     this.#exigirAtendente(user);
     const texto = motivoDe(motivo);
-    this.#escrever(() => {
-      const antes = this.#exigir(pedidoId);
-      if (antes.situacao === 'PAGO' && user?.nivel !== 'A') throw new ForbiddenError('Só o nível A pode cancelar um pedido pago');
-      if (!podeTransitar(antes.situacao, 'CANCELADO')) throw new ConflictError('Este pedido não pode ser cancelado');
-      this.repository.update(antes.id, { situacao: 'CANCELADO', canceladoEm: this.#agoraIso(), canceladoPor: user.id, motivoCancelamento: texto });
-      this.#log(user, 'cancelar', antes, `cancelado: ${texto}`, antes, this.repository.findById(antes.id));
+    return this.#transitar(user, id, 'CANCELADO', 'cancelar', `cancelado: ${texto}`, (antes, eventos) => {
+      if (antes.status !== 'ABERTO') eventos.push(...this.estoque.estornarPedido(user, antes.id));
+      return { canceladoEm: this.#agoraIso(), canceladoPor: user.id, motivoCancelamento: texto };
     });
-    return this.#publicar(pedidoId);
   }
 
-  aplicarDesconto(user, pedidoId, descontoCents) {
-    if (user?.nivel !== 'A') throw new ForbiddenError('Só o nível A pode aplicar desconto');
-    centavos(descontoCents, 'O desconto');
-    this.#escrever(() => {
-      const antes = this.#exigirSituacao(pedidoId, NAO_PAGOS);
-      const totais = calcularPedido(this.repository.itens(antes.id), descontoCents);
-      this.repository.update(antes.id, totais);
-      this.#log(user, 'desconto', antes, `recebeu desconto de ${descontoCents} centavos`, antes, this.repository.findById(antes.id));
+  /** Status operacional (cozinha/finalização). Confirmar, reabrir e cancelar têm métodos próprios. */
+  mudarStatus(user, id, status) {
+    if (!ALVOS_MUDAR_STATUS.includes(status)) throw new ValidationError('Use confirmar, reabrir ou cancelar');
+    return this.#transitar(user, id, status, 'mudar_status', `passou para ${status}`, (antes) => {
+      if (!podeMudarStatus(user?.nivel, antes.status, status)) throw new ForbiddenError('Sem permissão para esta mudança de status');
+      return {};
     });
-    return this.#publicar(pedidoId);
   }
 
-  listar({ de, ate, situacao, mesaId, atendenteId, q } = {}) {
-    const hoje = dataLocalDe(this.relogio());
-    return this.repository.listar({ de: de || hoje, ate: ate || de || hoje, situacao, mesaId, atendenteId, q })
-      .map((p) => ({ ...p, pagamentos: [] }));
+  listar(user, filtros = {}) {
+    return this.consulta.listar(user, filtros);
   }
 
-  /** Linhas da grade de pedidos (máx. 1000), com o resumo das rodadas da cozinha. */
-  listarResumo(filtros = {}) {
-    const pedidos = this.listar(filtros).slice(0, LIMITE_LISTA);
-    const cozinha = this.repository.resumosCozinha(pedidos.map((p) => p.id));
-    return pedidos.map((p) => ({
-      id: p.id, numeroDia: p.numeroDia, criadoEm: p.criadoEm, tipo: p.tipo, mesa: p.mesaNumero, clienteNome: p.clienteNome,
-      qtdItens: p.qtdItens, totalCents: p.totalCents, situacao: p.situacao, forma: p.forma, cozinha: cozinha.get(p.id) ?? null, atendente: p.atendente,
-    }));
+  obter(user, id) {
+    return this.consulta.obter(user, id);
   }
 
-  /** Comanda ainda não paga da mesa; 404 se não houver. */
-  comandaDaMesa(mesaId) {
-    const id = this.repository.comandaNaoPagaDaMesa(mesaId);
-    if (id === null) throw new NotFoundError('A mesa não tem comanda aberta');
-    return this.obter(id);
+  listarCozinha(user) {
+    return this.consulta.listarCozinha(user);
   }
 
-  obter(id) {
-    const pedido = this.#exigir(id);
-    return { ...pedido, itens: this.repository.itens(pedido.id), envios: this.repository.envios(pedido.id), pagamentos: [] };
-  }
-
-  #enviar(user, pedido) {
-    const pendentes = this.repository.pendentesParaEnvio(pedido.id);
-    if (!pendentes.length) throw new ValidationError('Não há itens pendentes para enviar');
-    const envio = this.repository.criarEnvio(pedido.id, {
-      vaiParaCozinha: pendentes.some((i) => i.vai_para_cozinha), enviadoEm: this.#agoraIso(), enviadoPor: user.id,
+  /**
+   * Mudança de status numa transação: valida a transição (409), aplica `preparar` (que devolve os campos extras e pode
+   * acumular eventos `estoque`), grava status + histórico + auditoria. Depois do commit: eventos e `aposMudarStatus`.
+   */
+  #transitar(user, id, para, acao, verbo, preparar) {
+    const eventos = [];
+    const pedidoId = this.db.transaction(() => {
+      const antes = this.#exigir(id);
+      if (!podeTransitar(antes.status, para)) throw new ConflictError(`Não é possível passar de ${antes.status} para ${para}`);
+      const campos = preparar(antes, eventos);
+      this.repository.update(antes.id, { ...campos, status: para });
+      this.repository.registrarHistorico(antes.id, { de: antes.status, para, actor: user, em: this.#agoraIso() });
+      this.#log(user, acao, antes, verbo, antes, this.repository.findById(antes.id));
+      return antes.id;
     });
-    this.audit.record({
-      actor: user, acao: 'enviar', entidade: 'pedido', entidadeId: pedido.id,
-      descricao: `Pedido ${pedido.numeroDia} enviado (rodada ${envio.rodada})`, antes: null, depois: envio,
-    });
-    return envio;
-  }
-
-  /** Atualiza `mesa_id` primeiro, ocupa a nova e só então libera a antiga. */
-  #moverComanda(user, antes, destinoId, eventos) {
-    this.#exigirMesaDisponivel(destinoId);
+    for (const evento of eventos) this.bus?.publish('estoque', evento);
+    const pedido = this.#publicar(pedidoId);
     try {
-      this.repository.update(antes.id, { mesaId: destinoId });
+      this.aposMudarStatus(pedido, user);
     } catch (error) {
-      if (ehComandaDuplicada(error)) throw new ConflictError('A mesa de destino já tem comanda aberta');
-      throw error;
+      this.logger?.error?.(error);
     }
-    this.#ocuparSeNecessario(user, destinoId, eventos);
-    this.mesas.liberar(user, antes.mesaId, { eventos });
-    this.#log(user, 'mover', antes, `movido para outra mesa`, antes, this.repository.findById(antes.id));
+    return pedido;
   }
 
-  #exigirMesaDisponivel(mesaId) {
-    const mesa = this.mesaRepository.findById(mesaId);
-    if (!mesa) throw new NotFoundError('Mesa não encontrada');
-    if (!mesa.ativo) throw new ConflictError('Mesa inativa');
-    if (this.repository.comandaNaoPagaDaMesa(mesa.id) !== null) throw new ConflictError('A mesa já tem comanda aberta');
-    return mesa;
+  #gravarItens(pedidoId, itens) {
+    itens.forEach((item, ordem) => this.repository.insertItem(pedidoId, item, ordem));
+    this.repository.update(pedidoId, calcularPedido(this.repository.itens(pedidoId), 0));
   }
 
-  /** Mesa ocupada à mão (sem comanda) é aceita como está. */
-  #ocuparSeNecessario(user, mesaId, eventos) {
-    if (this.mesaRepository.findById(mesaId).situacao !== 'OCUPADA') this.mesas.ocupar(user, mesaId, { eventos });
-  }
-
-  /** Só níveis A e B escrevem pedidos (a cozinha, nível C, não). */
+  /** Só níveis A e B escrevem pedidos (a cozinha, nível C, só muda status operacional). */
   #exigirAtendente(user) {
     if (!NIVEIS_PEDIDO.includes(user?.nivel)) throw new ForbiddenError('Sem permissão para alterar pedidos');
   }
 
-  /** Executa na transação coletando os eventos `mesa`, que só são publicados depois do commit. */
-  #escreverComMesas(work) {
-    const eventos = [];
-    const resultado = this.#escrever(() => work(eventos));
-    return { resultado, eventosMesa: eventos };
-  }
-
-  #inserirItens(pedidoId, itens) {
-    let ordem = this.repository.proximaOrdem(pedidoId);
-    for (const item of itens) this.repository.insertItem(pedidoId, item, ordem++);
-  }
-
-  /** Recalcula e grava subtotal/desconto/total; o desconto é limitado ao novo subtotal. */
-  #recalcular(pedidoId) {
-    const pedido = this.repository.findById(pedidoId);
-    const itens = this.repository.itens(pedidoId);
-    const { subtotalCents } = calcularPedido(itens, 0);
-    const totais = calcularPedido(itens, Math.min(pedido.descontoCents, subtotalCents));
-    this.repository.update(pedidoId, totais);
-    return totais;
-  }
-
-  #escrever(work) {
-    try {
-      return this.db.transaction(work);
-    } catch (error) {
-      if (ehComandaDuplicada(error)) throw new ConflictError('A mesa já tem comanda aberta');
-      throw error;
-    }
-  }
-
-  #publicar(pedidoId, eventosMesa = []) {
-    for (const evento of eventosMesa) this.bus?.publish('mesa', evento);
-    const pedido = this.obter(pedidoId);
-    this.bus?.publish('pedido', { id: pedido.id, situacao: pedido.situacao });
+  #publicar(pedidoId) {
+    const pedido = this.consulta.carregar(pedidoId);
+    this.bus?.publish('pedido', { id: pedido.id, status: pedido.status });
     return pedido;
   }
 
@@ -321,12 +204,12 @@ class PedidoService {
   }
 
   #log(user, acao, pedido, verbo, antes, depois) {
-    this.audit.record({ actor: user, acao, entidade: 'pedido', entidadeId: pedido.id, descricao: `Pedido ${pedido.numeroDia} ${verbo}`, antes, depois });
+    this.audit.record({ actor: user, acao, entidade: 'pedido', entidadeId: pedido.id, descricao: `Pedido ${pedido.id} ${verbo}`, antes, depois });
   }
 
-  #exigirSituacao(id, situacoes) {
+  #exigirStatus(id, status, mensagem) {
     const pedido = this.#exigir(id);
-    if (!situacoes.includes(pedido.situacao)) throw new ConflictError('Operação não permitida na situação atual do pedido');
+    if (pedido.status !== status) throw new ConflictError(mensagem);
     return pedido;
   }
 

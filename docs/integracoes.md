@@ -17,30 +17,33 @@ O restaurante pareia o número uma única vez, lendo um QR Code com o celular (W
 // src/application/ports/Mensageiro.js
 // estado(): 'DESCONECTADO' | 'AGUARDANDO_QR' | 'CONECTANDO' | 'CONECTADO'
 // enviar({ telefoneE164, texto }) → Promise<{ id }>   (lança MensageiroError com código)
-// on('estado' | 'qr', handler)
+// WhatsAppWebMensageiro ainda expõe iniciar(), parar(), qrAtual() e numeroConectado()
 ```
 
 Implementações: `WhatsAppWebMensageiro` (real) e `MensageiroSimulado` (grava em memória/log).
 
 ### Detalhes de implementação
 
-- `new Client({ authStrategy: new LocalAuth({ dataPath: <userData>/whatsapp-session }), puppeteer: { executablePath, headless: true } })`.
-- **Navegador (proposta):** usar o **Microsoft Edge** já instalado no Windows 10/11 (`executablePath` detectado no registro/caminhos padrão,
-  configurável) em vez de baixar o Chromium do Puppeteer. Isso deixa o instalador menor e evita problemas de empacotamento.
-  Definir `PUPPETEER_SKIP_DOWNLOAD=1` na instalação das dependências.
-- O cliente roda no processo do servidor Node e é iniciado **depois** da janela abrir, para não atrasar a abertura do sistema.
-- Eventos `qr`, `authenticated`, `ready`, `disconnected` e `auth_failure` atualizam o estado e são publicados no SSE.
-  A tela Configurações → WhatsApp mostra o QR Code de pareamento e o estado atual.
-- Antes de enviar: normalizar o telefone para E.164, montar o id `55DDDNUMERO@c.us` e checar `client.getNumberId()`;
-  se o número não tiver WhatsApp, falha com `NUMERO_SEM_WHATSAPP`.
-- Envio com tempo limite de 20 s. Sem novas tentativas automáticas: o atendente decide reenviar.
-- Reconexão automática ao cair (backoff 5 s → 60 s). Se a sessão for invalidada, o estado volta para `AGUARDANDO_QR`.
+- `new Client({ authStrategy: new LocalAuth({ dataPath }), puppeteer: { executablePath, headless: true, args: ['--no-sandbox'] } })`,
+  criado só em `criarClienteWhatsApp` (o pacote é carregado sob demanda; testes nunca o carregam).
+- **Navegador:** o **Microsoft Edge** já instalado (`detectarNavegador` procura `msedge.exe` em `%ProgramFiles(x86)%` e `%ProgramFiles%`;
+  a configuração `whatsapp.navegador` pode apontar outro caminho). O Chromium **não** é baixado (`.npmrc`: `puppeteer_skip_download=1`).
+  Sem o Edge, `iniciar()` não é chamado: o estado fica `DESCONECTADO` e `GET /api/whatsapp/estado` informa `erro: 'Navegador não encontrado'`.
+- **Sessão:** `<userData>/whatsapp-session` (`%APPDATA%pdv-restaurantewhatsapp-session`), fora do banco, do backup e do instalador.
+  O pareamento por QR é feito uma vez e sobrevive a reinicializações.
+- O cliente é iniciado **depois** que a janela abre (não atrasa o sistema) e encerrado (`parar()`) ao sair do app.
+- **Estados:** `DESCONECTADO` (inicial) → `CONECTANDO` → `AGUARDANDO_QR` (evento `qr`) → `CONECTADO` (`ready`). `auth_failure` e `disconnected`
+  voltam a `DESCONECTADO`. Cada mudança é publicada no SSE (`whatsapp`); o QR só chega ao nível A.
+- **Reconexão:** após `disconnected`, `auth_failure` ou falha ao abrir o navegador, nova tentativa após 5 s, 10 s, 20 s, 40 s e 60 s (depois, a cada 60 s);
+  o contador reinicia ao conectar. `parar()` cancela a reconexão. Falhas são registradas no log e nunca derrubam o app.
+- **Envio:** telefone normalizado para dígitos (`55DDDNÚMERO`), `client.getNumberId()` (sem WhatsApp → `NUMERO_SEM_WHATSAPP`), limite de 20 s
+  (`TIMEOUT`), demais falhas `ERRO_ENVIO`; fora do estado `CONECTADO` → `NAO_CONECTADO`. Sem novas tentativas automáticas: o atendente decide reenviar.
 
 ### Riscos e cuidados
 
 | Risco | Mitigação |
 | --- | --- |
-| A biblioteca **não é oficial**; o WhatsApp pode mudar o WhatsApp Web e quebrar o envio | Fixar a versão; testar antes de atualizar; o fluxo da fila sempre tem saída manual ("Chamei de outra forma") |
+| A biblioteca **não é oficial**; o WhatsApp pode mudar o WhatsApp Web e quebrar o envio | Fixar a versão; testar antes de atualizar; falhas de envio ficam visíveis no histórico de notificações do pedido e podem ser reenviadas |
 | Bloqueio do número por uso automatizado | Usar só para mensagens disparadas por clique e para clientes que deram o número; sem envio em massa; recomendar um número exclusivo do restaurante |
 | Consumo de memória do navegador (~200–300 MB) | Uma única sessão; encerrar ao fechar o app |
 | Alternativa oficial | Se a estabilidade virar problema, criar o adaptador `WhatsAppCloudApiMensageiro` (API oficial da Meta, paga por conversa) usando a mesma porta |

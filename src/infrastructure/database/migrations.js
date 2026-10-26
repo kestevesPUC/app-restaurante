@@ -61,6 +61,8 @@ module.exports = [
           id INTEGER PRIMARY KEY,
           nome TEXT NOT NULL,
           nome_norm TEXT NOT NULL UNIQUE,
+          unidade_medida TEXT NOT NULL CHECK (unidade_medida IN ('UN','G','KG','ML','L','COLHER','FATIA','PORCAO')),
+          observacao TEXT,
           preco_adicional_cents INTEGER NOT NULL DEFAULT 0 CHECK (preco_adicional_cents >= 0),
           pode_ser_adicional INTEGER NOT NULL DEFAULT 0 CHECK (pode_ser_adicional IN (0,1)),
           ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1))
@@ -74,6 +76,7 @@ module.exports = [
           codigo TEXT UNIQUE,
           descricao TEXT,
           preco_cents INTEGER NOT NULL CHECK (preco_cents > 0),
+          tempo_preparo_min INTEGER NOT NULL CHECK (tempo_preparo_min > 0),
           foto BLOB,
           foto_tipo TEXT,
           ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1))
@@ -141,29 +144,29 @@ module.exports = [
         CREATE TABLE pedidos (
           id INTEGER PRIMARY KEY,
           data_local TEXT NOT NULL,
-          numero_dia INTEGER NOT NULL CHECK (numero_dia >= 1),
-          tipo TEXT NOT NULL CHECK (tipo IN ('BALCAO','MESA')),
+          tipo TEXT NOT NULL DEFAULT 'BALCAO' CHECK (tipo IN ('BALCAO','MESA')),
           mesa_id INTEGER REFERENCES mesas(id) ON DELETE RESTRICT,
+          status TEXT NOT NULL DEFAULT 'ABERTO'
+            CHECK (status IN ('ABERTO','RECEBIDO','EM_PREPARO','PRONTO_RETIRADA','PRONTO_ENTREGA','FINALIZADO','CANCELADO')),
+          cliente_id INTEGER REFERENCES clientes(id) ON DELETE RESTRICT,
           cliente_nome TEXT,
-          situacao TEXT NOT NULL DEFAULT 'ABERTO' CHECK (situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO','PAGO','CANCELADO')),
+          cliente_telefone TEXT,
+          tempo_estimado_min INTEGER NOT NULL DEFAULT 0 CHECK (tempo_estimado_min >= 0),
+          confirmado_em TEXT,
           subtotal_cents INTEGER NOT NULL DEFAULT 0,
           desconto_cents INTEGER NOT NULL DEFAULT 0,
           total_cents INTEGER NOT NULL DEFAULT 0,
           observacao TEXT,
           criado_por INTEGER NOT NULL REFERENCES usuarios(id),
           criado_em TEXT NOT NULL,
-          finalizado_em TEXT,
-          pago_em TEXT,
           cancelado_em TEXT,
           cancelado_por INTEGER REFERENCES usuarios(id),
           motivo_cancelamento TEXT,
-          UNIQUE (data_local, numero_dia),
-          CHECK ((tipo = 'MESA' AND mesa_id IS NOT NULL) OR (tipo = 'BALCAO' AND cliente_nome IS NOT NULL)),
           CHECK (total_cents = subtotal_cents - desconto_cents AND desconto_cents BETWEEN 0 AND subtotal_cents)
         );
-        CREATE UNIQUE INDEX ux_comanda_aberta ON pedidos(mesa_id) WHERE tipo = 'MESA' AND situacao IN ('ABERTO','AGUARDANDO_PAGAMENTO');
         CREATE INDEX ix_pedidos_data ON pedidos(data_local, id);
-        CREATE INDEX ix_pedidos_situacao ON pedidos(situacao);
+        CREATE INDEX ix_pedidos_status ON pedidos(status);
+        CREATE INDEX ix_pedidos_cliente ON pedidos(cliente_id);
 
         CREATE TABLE pedido_envios (
           id INTEGER PRIMARY KEY,
@@ -185,8 +188,11 @@ module.exports = [
           id INTEGER PRIMARY KEY,
           pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
           envio_id INTEGER REFERENCES pedido_envios(id) ON DELETE RESTRICT,
-          prato_id INTEGER NOT NULL REFERENCES pratos(id) ON DELETE RESTRICT,
-          prato_nome TEXT NOT NULL,
+          item_tipo TEXT NOT NULL CHECK (item_tipo IN ('PRATO','BEBIDA')),
+          prato_id INTEGER REFERENCES pratos(id) ON DELETE RESTRICT,
+          bebida_id INTEGER REFERENCES bebidas(id) ON DELETE RESTRICT,
+          item_nome TEXT NOT NULL,
+          tempo_preparo_min INTEGER NOT NULL DEFAULT 0 CHECK (tempo_preparo_min >= 0),
           preco_unit_cents INTEGER NOT NULL CHECK (preco_unit_cents >= 0),
           adicionais_cents INTEGER NOT NULL DEFAULT 0 CHECK (adicionais_cents >= 0),
           quantidade INTEGER NOT NULL CHECK (quantidade >= 1),
@@ -195,10 +201,13 @@ module.exports = [
           ordem INTEGER NOT NULL DEFAULT 0,
           cancelado_em TEXT,
           cancelado_por INTEGER REFERENCES usuarios(id),
-          motivo_cancelamento TEXT
+          motivo_cancelamento TEXT,
+          CHECK ((item_tipo = 'PRATO' AND prato_id IS NOT NULL AND bebida_id IS NULL)
+              OR (item_tipo = 'BEBIDA' AND bebida_id IS NOT NULL AND prato_id IS NULL))
         );
         CREATE INDEX ix_itens_pedido ON pedido_itens(pedido_id);
         CREATE INDEX ix_itens_prato ON pedido_itens(prato_id);
+        CREATE INDEX ix_itens_bebida ON pedido_itens(bebida_id);
         CREATE INDEX ix_itens_envio ON pedido_itens(envio_id);
 
         CREATE TABLE item_modificacoes (
@@ -213,6 +222,71 @@ module.exports = [
           CHECK (tipo = 'ADICIONAR' OR (quantidade = 1 AND preco_unit_cents = 0))
         );
         CREATE INDEX ix_modificacoes_ingrediente ON item_modificacoes(ingrediente_id);
+      `);
+    },
+  },
+  {
+    version: 5,
+    up(db) {
+      db.exec(`
+        CREATE TABLE clientes (
+          id INTEGER PRIMARY KEY,
+          nome TEXT NOT NULL,
+          telefone TEXT NOT NULL UNIQUE,
+          criado_em TEXT NOT NULL,
+          atualizado_em TEXT NOT NULL
+        );
+
+        CREATE TABLE bebidas (
+          id INTEGER PRIMARY KEY,
+          nome TEXT NOT NULL,
+          nome_norm TEXT NOT NULL UNIQUE,
+          preco_cents INTEGER NOT NULL CHECK (preco_cents > 0),
+          estoque_qtd INTEGER NOT NULL DEFAULT 0 CHECK (estoque_qtd >= 0),
+          estoque_minimo INTEGER NOT NULL DEFAULT 0 CHECK (estoque_minimo >= 0),
+          ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0,1)),
+          criado_em TEXT NOT NULL
+        );
+
+        CREATE TABLE movimentacoes_estoque (
+          id INTEGER PRIMARY KEY,
+          bebida_id INTEGER NOT NULL REFERENCES bebidas(id) ON DELETE RESTRICT,
+          tipo TEXT NOT NULL CHECK (tipo IN ('ENTRADA','SAIDA','AJUSTE','VENDA','ESTORNO')),
+          quantidade INTEGER NOT NULL,
+          saldo_apos INTEGER NOT NULL,
+          motivo TEXT,
+          pedido_id INTEGER REFERENCES pedidos(id) ON DELETE RESTRICT,
+          usuario_id INTEGER,
+          usuario TEXT,
+          em TEXT NOT NULL
+        );
+        CREATE INDEX ix_movimentacoes_bebida ON movimentacoes_estoque(bebida_id, em);
+        CREATE INDEX ix_movimentacoes_pedido ON movimentacoes_estoque(pedido_id);
+
+        CREATE TABLE pedido_status_historico (
+          id INTEGER PRIMARY KEY,
+          pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+          status_anterior TEXT,
+          status_novo TEXT NOT NULL,
+          usuario_id INTEGER,
+          usuario TEXT,
+          em TEXT NOT NULL
+        );
+        CREATE INDEX ix_status_historico_pedido ON pedido_status_historico(pedido_id, em);
+
+        CREATE TABLE notificacoes_whatsapp (
+          id INTEGER PRIMARY KEY,
+          pedido_id INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE RESTRICT,
+          tipo TEXT NOT NULL CHECK (tipo IN ('RETIRADA','ENTREGA')),
+          telefone TEXT NOT NULL,
+          texto TEXT NOT NULL,
+          situacao TEXT NOT NULL CHECK (situacao IN ('ENVIADA','FALHOU')),
+          erro TEXT,
+          automatica INTEGER NOT NULL DEFAULT 0 CHECK (automatica IN (0,1)),
+          enviada_por INTEGER REFERENCES usuarios(id),
+          em TEXT NOT NULL
+        );
+        CREATE INDEX ix_notificacoes_pedido ON notificacoes_whatsapp(pedido_id, em);
       `);
     },
   },

@@ -9,11 +9,12 @@ const anonymous = (name) => ({ id: null, usuario: String(name || '(não informad
  */
 class AuditTrail {
   /**
-   * @param {{repository: import('../infrastructure/repositories/AuditRepository'), clock?: () => Date}} deps
+   * @param {{repository: import('../infrastructure/repositories/AuditRepository'), clock?: () => Date, logger?: {info?: Function}}} deps
    */
-  constructor({ repository, clock = () => new Date() }) {
+  constructor({ repository, clock = () => new Date(), logger = null }) {
     this.repository = repository;
     this.clock = clock;
+    this.logger = logger;
   }
 
   /**
@@ -30,6 +31,10 @@ class AuditTrail {
     this.repository.insert({
       em: this.clock().toISOString(), usuarioId: actor?.id, usuario: actor?.usuario || '(sistema)', acao, entidade, entidadeId, descricao, antes, depois,
     });
+    // Evento importante (login, pedido, estoque, notificação...) também no log estruturado; antes/depois ficam só no banco.
+    try {
+      this.logger?.info?.(`auditoria: ${acao} ${entidade}`, { acao, entidade, entidadeId, usuario: actor?.usuario || '(sistema)', descricao });
+    } catch { /* o log nunca atrapalha a operação */ }
   }
 
   static anonymous(name) {
