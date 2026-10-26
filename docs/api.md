@@ -3,7 +3,7 @@
 JSON sobre HTTP, consumida apenas pela interface do próprio sistema. Servida em `127.0.0.1`; na rede local só as rotas marcadas
 com 🌐 (andon no tablet e Moderninha Smart), ver [Arquitetura → Segurança](arquitetura.md#segurança).
 Autenticação por cookie de sessão `sid` (`HttpOnly; SameSite=Strict`). Erros: `{ "error": "mensagem", "code": "CODIGO" }` com o status
-adequado (400 validação, 401 não autenticado, 403 sem permissão, 404, 409 conflito de situação, 429 muitas tentativas, 502 serviço externo, 500).
+adequado (400 validação, 401 não autenticado, 403 sem permissão, 404, 409 conflito de situação, 429 muitas tentativas, 502 serviço externo, 500). O `500` é sempre `{error: 'Erro interno'}`, sem stack nem identificador; o erro completo (com um `idRequisicao` de 8 hex, método e rota) vai só para o log `pdv-AAAA-MM-DD.log` (14 dias).
 Valores monetários em **centavos** (inteiros); datas `AAAA-MM-DD`; data/hora ISO 8601.
 
 **Acesso:** `todos` = Administrador e Atendente (o nível C, Cozinha, só acessa as rotas indicadas em [Cozinha](#cozinha)); `A` = somente Administrador. Enquanto a senha provisória não for trocada, só `/api/me` e `/api/me/senha` respondem.
@@ -16,6 +16,7 @@ Valores monetários em **centavos** (inteiros); datas `AAAA-MM-DD`; data/hora IS
 | POST | `/api/logout` | público | encerra a sessão |
 | GET | `/api/me` | todos | usuário logado |
 | POST | `/api/me/senha` | todos | `{atual, nova}` |
+| GET | `/api/sistema` | todos (inclusive Cozinha) | `{nome, versao}`: nome do produto e versão do `package.json` (lida uma vez na subida); sem login → `401`. A interface usa para o título (`PDV Restaurante — v0.1.0`) |
 
 ## Cardápio
 

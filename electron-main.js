@@ -8,6 +8,9 @@ const DailyBackup = require('./src/infrastructure/backup/DailyBackup');
 const { executarBackupSeguro } = require('./src/desktop/executarBackupSeguro');
 const { protegerNavegacao } = require('./src/desktop/protegerNavegacao');
 const { comLimite } = require('./src/desktop/comLimite');
+const { tituloDaJanela } = require('./src/desktop/titulo');
+const JsonLineLogger = require('./src/infrastructure/logging/JsonLineLogger');
+const pacote = require('./package.json');
 const { detectarNavegador } = require('./src/infrastructure/whatsapp/detectarNavegador');
 
 // PASTA DE DADOS FIXA — não altere. O banco (pdv.sqlite) fica aqui e o instalador NÃO a remove ao desinstalar,
@@ -23,6 +26,7 @@ const SEIS_HORAS = 6 * 60 * 60 * 1000;
 const LIMITE_PARAR_WHATSAPP_MS = 5000;
 let win;
 let application;
+let logger = console; // vira o JsonLineLogger em iniciar()
 let encerrando = false;
 const timers = [];
 
@@ -48,7 +52,7 @@ function agendarManutencao(atualizador) {
   const backup = new DailyBackup({ db: application.db, pasta: path.join(app.getPath('documents'), 'PDV Restaurante Backups') });
   let avisou = false;
   const rodar = () => executarBackupSeguro(backup, {
-    logger: console,
+    logger,
     aoFalhar: (error) => {
       if (avisou) return;
       avisou = true; // um aviso por execução do app; não bloqueante
@@ -58,8 +62,9 @@ function agendarManutencao(atualizador) {
       }).catch(() => {});
     },
   });
-  rodar();
-  timers.push(setInterval(rodar, SEIS_HORAS));
+  const rodarComLog = () => { const r = rodar(); logger.info?.(r ? 'backup diário concluído' : 'backup diário não realizado'); return r; };
+  rodarComLog();
+  timers.push(setInterval(rodarComLog, SEIS_HORAS));
   if (atualizador) {
     timers.push(setTimeout(() => atualizador.check(), 5_000));
     timers.push(setInterval(() => atualizador.check(), SEIS_HORAS));
@@ -68,10 +73,12 @@ function agendarManutencao(atualizador) {
 
 async function iniciar() {
   const dbPath = path.join(app.getPath('userData'), 'pdv.sqlite');
+  logger = new JsonLineLogger({ pasta: path.join(app.getPath('userData'), 'logs'), relogio: Date.now });
+  logger.info('aplicativo iniciado', { versao: app.getVersion() });
   const atualizador = criarAtualizador();
   // Sessão do WhatsApp em userData: fora do banco e do backup. O Edge instalado é o navegador (nada é baixado).
   const whatsapp = { habilitado: true, dataPath: path.join(app.getPath('userData'), 'whatsapp-session'), navegador: null };
-  application = buildApplication({ dbPath, whatsapp });
+  application = buildApplication({ dbPath, whatsapp, logger });
   whatsapp.navegador = detectarNavegador({ configurado: application.services.config.get('whatsapp.navegador') });
   const inicial = application.services.adminBootstrap.run();
   const { port } = await application.server.listen(0, '127.0.0.1');
@@ -88,15 +95,16 @@ async function iniciar() {
   if (app.isPackaged) Menu.setApplicationMenu(null);
   win = new BrowserWindow({
     icon: path.join(__dirname, 'build', 'icon.png'), width: 1280, height: 820, minWidth: 360, minHeight: 480,
-    title: `PDV Restaurante · v${app.getVersion()}`, autoHideMenuBar: true,
+    title: tituloDaJanela(pacote.productName || 'PDV Restaurante', app.getVersion()), autoHideMenuBar: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: !app.isPackaged },
   });
   win.on('page-title-updated', (event) => event.preventDefault());
   protegerNavegacao(win.webContents, url, (alvo) => shell.openExternal(alvo));
   win.loadURL(url);
+  application.bus.subscribe(({ tipo, dados }) => { if (tipo === 'whatsapp') logger.info('estado do WhatsApp', { estado: dados.estado }); });
   agendarManutencao(atualizador);
   // Só depois da janela abrir; sem o Edge o estado fica DESCONECTADO e GET /api/whatsapp/estado informa o motivo.
-  if (whatsapp.navegador) application.mensageiro.iniciar().catch((error) => console.error('[whatsapp]', error.message));
+  if (whatsapp.navegador) application.mensageiro.iniciar().catch((error) => logger.error('falha ao iniciar o WhatsApp', { motivo: error.message }));
 }
 
 app.on('second-instance', () => {
@@ -119,7 +127,8 @@ app.on('before-quit', (event) => {
   event.preventDefault();
   encerrando = true;
   timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
-  comLimite(Promise.resolve().then(() => application.mensageiro.parar?.()), LIMITE_PARAR_WHATSAPP_MS, { rotulo: 'whatsapp', logger: console })
-    .then(() => application.close()).catch((error) => console.error('[encerrar]', error.message)).finally(() => app.quit());
+  comLimite(Promise.resolve().then(() => application.mensageiro.parar?.()), LIMITE_PARAR_WHATSAPP_MS, { rotulo: 'whatsapp', logger })
+    .then(() => application.close()).catch((error) => logger.error('falha ao encerrar', { motivo: error.message }))
+    .finally(() => { logger.info('aplicativo encerrado'); logger.fechar?.().finally(() => app.quit()); });
 });
 app.on('window-all-closed', () => app.quit());

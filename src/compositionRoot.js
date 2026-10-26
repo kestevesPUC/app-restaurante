@@ -19,6 +19,9 @@ const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
 const EventBus = require('./infrastructure/events/EventBus');
 
+const SistemaController = require('./presentation/http/controllers/SistemaController');
+const pacote = require('../package.json');
+
 const AuditTrail = require('./application/AuditTrail');
 const AuthService = require('./application/AuthService');
 const UsuarioService = require('./application/UsuarioService');
@@ -71,7 +74,8 @@ const HORA = 60 * 60 * 1000;
  * @param {string} [options.dbPath] arquivo SQLite ou ':memory:'
  * @param {() => number} [options.relogio] "agora" em milissegundos (injetável nos testes)
  * @param {string} [options.publicDir] pasta dos arquivos estáticos
- * @param {Pick<Console,'error'>} [options.logger]
+ * @param {Pick<Console,'error'>} [options.logger] ex.: JsonLineLogger; `info` é opcional
+ * @param {{nome: string, versao: string}} [options.sistema] padrão: package.json
  * @param {number} [options.heartbeatMs] intervalo do batimento do canal SSE
  * @param {import('./application/ports/Mensageiro').Mensageiro} [options.mensageiro] padrão: MensageiroSimulado
  * @param {number} [options.notificacaoTimeoutMs] limite de cada envio de WhatsApp
@@ -80,6 +84,7 @@ const HORA = 60 * 60 * 1000;
 function buildApplication({
   dbPath = ':memory:', relogio = Date.now, publicDir = path.join(__dirname, '..', 'public'), logger = console, heartbeatMs,
   mensageiro: mensageiroInjetado, notificacaoTimeoutMs, whatsapp = {},
+  sistema = { nome: pacote.productName || 'PDV Restaurante', versao: pacote.version },
 } = {}) {
   const clock = () => new Date(relogio());
   const db = new SqliteDatabase(dbPath);
@@ -116,7 +121,7 @@ function buildApplication({
     : new MensageiroSimulado());
   const erroWhatsApp = () => (whatsappReal && !whatsapp.navegador ? 'Navegador não encontrado' : null);
 
-  const audit = new AuditTrail({ repository: repositories.auditoria, clock });
+  const audit = new AuditTrail({ repository: repositories.auditoria, clock, logger });
   const services = {
     hasher,
     audit,
@@ -169,6 +174,7 @@ function buildApplication({
   new RelatorioController(services.relatorios, { xlsx: new ExcelExportador({ agora: () => new Date(relogio()) }), pdf: new PdfExportador({ agora: () => new Date(relogio()) }) }, relogio).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
+  new SistemaController(sistema).register(router);
   new AuditController(repositories.auditoria).register(router);
   new EventController(bus, { heartbeatMs }).register(router);
 

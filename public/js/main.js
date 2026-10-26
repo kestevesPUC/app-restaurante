@@ -65,6 +65,11 @@ function voltarAoLogin(erro = '') {
   renderLogin(root, entrarCom, erro);
 }
 
+function atualizarTitulo() {
+  const app = state.tituloApp || 'PDV Restaurante';
+  document.title = state.rotuloAtual ? `${state.rotuloAtual} — ${app}` : app;
+}
+
 /** Mostra a tela da rota atual, respeitando o nível do usuário. */
 function mostrar() {
   const { me } = state;
@@ -80,14 +85,24 @@ function mostrar() {
   });
   document.getElementById('ptitle').textContent = rota.rotulo;
   document.getElementById('psub').textContent = rota.subtitulo;
-  document.title = `${rota.rotulo} — PDV Restaurante`;
+  state.rotuloAtual = rota.rotulo;
+  atualizarTitulo();
   notify('');
   document.getElementById('view').innerHTML = '';
   VIEWS[id]().catch(fail);
 }
 
+/** Nome e versão do sistema (mesmo texto da janela do desktop): "PDV Restaurante — v0.1.0". */
+function carregarTitulo() {
+  api.get('/api/sistema').then(({ nome, versao }) => {
+    state.tituloApp = versao ? `${nome} — v${versao}` : nome;
+    atualizarTitulo();
+  }).catch(() => {});
+}
+
 function entrarCom(me) {
   state.me = me;
+  carregarTitulo();
   if (me.mustChange) {
     renderTrocaSenha(root, async () => {
       // A troca reemite o cookie da sessão: segue logado, só atualiza os dados do usuário.

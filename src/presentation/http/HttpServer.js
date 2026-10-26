@@ -1,5 +1,6 @@
 'use strict';
 const http = require('node:http');
+const { randomBytes } = require('node:crypto');
 const AppError = require('../../domain/errors/AppError');
 const UnauthorizedError = require('../../domain/errors/UnauthorizedError');
 const ForbiddenError = require('../../domain/errors/ForbiddenError');
@@ -45,8 +46,11 @@ class HttpServer {
   }
 
   async #handle(req, res) {
+    const idRequisicao = randomBytes(4).toString('hex'); // só vai para o log, nunca para a resposta
+    let rota = '';
     try {
       const url = new URL(req.url, 'http://localhost');
+      rota = url.pathname;
       if (!url.pathname.startsWith('/api/')) return this.staticHandler.handle(url.pathname, res);
 
       const match = this.router.match(req.method, url.pathname);
@@ -73,7 +77,7 @@ class HttpServer {
       if (res.headersSent) return undefined; // o próprio handler respondeu (ex.: SSE)
       return this.#send(res, result, headers);
     } catch (error) {
-      return this.#sendError(res, error);
+      return this.#sendError(res, error, { idRequisicao, metodo: req.method, rota });
     }
   }
 
@@ -103,9 +107,9 @@ class HttpServer {
     return res.end(JSON.stringify(result ?? {}));
   }
 
-  #sendError(res, error) {
+  #sendError(res, error, contexto) {
     const known = error instanceof AppError;
-    if (!known) this.logger.error(error);
+    if (!known) this.logger.error(error, contexto); // sem corpo nem cabeçalhos da requisição
     if (res.headersSent) return res.end();
     res.writeHead(known ? error.status : 500, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify({ error: known ? error.message : 'Erro interno' }));
