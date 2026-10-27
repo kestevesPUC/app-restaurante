@@ -17,8 +17,8 @@ let ouvinte = null; // um único ouvinte de eventos, mesmo com recarregamentos d
 
 /** Botões do cartão conforme o status e o nível (B acompanha, mas só A e C mexem na cozinha). */
 function botoes(p, nivel) {
-  const b = (status, rotulo, alt = false) => `<button type="button" class="btn${alt ? ' alt' : ''} sm" data-id="${p.id}" data-status="${status}">${rotulo}</button>`;
-  const reenviar = nivel !== 'C' && p.status.startsWith('PRONTO')
+  const b = (status, rotulo, alt = false) => `<button type="button" class="btn${alt ? ' alt' : ''} sm" data-id="${p.id}" data-status="${status}"${p.cliente?.telefone ? ' data-aviso="1"' : ''}>${rotulo}</button>`;
+  const reenviar = nivel !== 'C' && p.status.startsWith('PRONTO') && p.cliente?.telefone
     ? ` <button type="button" class="btn alt sm" data-id="${p.id}" data-reenviar="1">${icon('whatsapp')} Reenviar WhatsApp</button>` : '';
   if (nivel === 'B') return p.status.startsWith('PRONTO') ? `${b('FINALIZADO', 'Finalizar')}${reenviar}` : '';
   if (p.status === 'RECEBIDO') return b('EM_PREPARO', 'Iniciar preparo');
@@ -64,7 +64,7 @@ export async function viewAndon() {
     b.disabled = true;
     try {
       await api.post(`/api/pedidos/${b.dataset.id}/status`, { status: b.dataset.status });
-      notify(b.dataset.status.startsWith('PRONTO') ? 'Pedido pronto — o cliente será avisado pelo WhatsApp' : 'Pedido atualizado');
+      notify(b.dataset.status.startsWith('PRONTO') ? `Pedido pronto${b.dataset.aviso ? ' — o cliente será avisado pelo WhatsApp' : ''}` : 'Pedido atualizado');
       await recarregar();
     } catch (error) { b.disabled = false; fail(error); }
   };

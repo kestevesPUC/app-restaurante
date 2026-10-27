@@ -53,7 +53,7 @@ export async function viewPedidoNovo() {
     const c = document.getElementById('pn-cart');
     c.innerHTML = `<ul class="cart-list">${linhas || '<li class="coming">Toque em um item do cardápio para adicionar.</li>'}</ul>
       <div class="form-grid"><label>Nome do cliente<input id="pn-nome" data-mask="nome" maxlength="60" autocomplete="off" value="${esc(estado.cliente.nome)}"></label>
-      <label>Telefone (WhatsApp)<input id="pn-tel" data-mask="telefone" inputmode="tel" placeholder="(11) 99999-8888" autocomplete="off" value="${esc(estado.cliente.telefone)}"></label>
+      <label>Telefone (WhatsApp, opcional)<input id="pn-tel" data-mask="telefone" inputmode="tel" placeholder="(11) 99999-8888" autocomplete="off" value="${esc(estado.cliente.telefone)}"></label>
       <label class="wide">Observação do pedido<input id="pn-obs" maxlength="140" autocomplete="off" value="${esc(estado.observacao)}"></label></div>
       <p class="cart-total"><span>Total</span><b>${brl(total())}</b></p>
       <div class="row"><button type="button" class="btn" id="pn-ok" ${estado.itens.length ? '' : 'disabled'}>Confirmar pedido</button>

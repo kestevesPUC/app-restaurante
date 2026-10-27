@@ -109,10 +109,13 @@ class PedidoService {
   confirmar(user, id) {
     this.#exigirAtendente(user);
     return this.#transitar(user, id, 'RECEBIDO', 'confirmar', 'confirmado', (antes, eventos) => {
-      if (!antes.clienteNome || !antes.clienteTelefone) throw new ValidationError('Informe o nome e o telefone do cliente');
+      if (!antes.clienteNome) throw new ValidationError('Informe o nome do cliente');
       const itens = this.repository.itens(antes.id);
       if (!itens.length) throw new ValidationError('Informe ao menos um item');
-      const cliente = this.clientes.registrar(user, { nome: antes.clienteNome, telefone: antes.clienteTelefone });
+      // O telefone é opcional: sem ele o pedido não vira cliente cadastrado e nenhum aviso é enviado.
+      const cliente = antes.clienteTelefone
+        ? this.clientes.registrar(user, { nome: antes.clienteNome, telefone: antes.clienteTelefone })
+        : { id: null, nome: antes.clienteNome, telefone: null };
       const bebidas = itens.filter((i) => i.tipo === 'BEBIDA').map((i) => ({ bebidaId: i.itemId, quantidade: i.quantidade }));
       eventos.push(...this.estoque.baixarParaPedido(user, antes.id, bebidas));
       return {

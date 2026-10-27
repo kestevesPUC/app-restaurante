@@ -29,7 +29,7 @@ export async function viewPedidos() {
     const b = [];
     if (p.status === 'ABERTO') b.push(['confirmar', 'Confirmar']);
     if (p.status === 'PRONTO_RETIRADA' || p.status === 'PRONTO_ENTREGA') b.push(['finalizar', 'Finalizar']);
-    if (p.status.startsWith('PRONTO')) b.push(['reenviar', `${icon('whatsapp')} Reenviar WhatsApp`]);
+    if (p.status.startsWith('PRONTO') && p.cliente?.telefone) b.push(['reenviar', `${icon('whatsapp')} Reenviar WhatsApp`]);
     if (!['FINALIZADO', 'CANCELADO'].includes(p.status)) b.push(['cancelar', 'Cancelar', true]);
     return b.map(([a, rotulo, perigo]) => `<button type="button" class="btn alt sm${perigo ? ' danger-text' : ''}" data-a="${a}" data-id="${p.id}">${rotulo}</button>`).join(' ');
   };

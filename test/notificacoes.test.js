@@ -197,11 +197,12 @@ test('nome com $& e $1 é preservado literalmente', async () => {
   assert.equal(r('$1'), 'Olá, *$1*! nº 3');
 });
 
-test('pedido sem cliente ou sem telefone: FALHOU visível, sem chamar o mensageiro (automático e reenviar)', async () => {
+test('pedido sem cliente ou sem telefone: nada é enviado nem registrado; reenviar recusa com 409', async () => {
   const p = emPreparo();
   s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
   await s.notificacoes.aguardarPendentes();
   app.mensageiro.enviadas.length = 0;
+  const antes = app.app.repositories.notificacoes.listarPorPedido(p.id).length;
   for (const cliente of [null, { id: 1, nome: 'Ana', telefone: null }, { id: 1, nome: 'Ana', telefone: '   ' }, { id: 1, nome: 'Ana', telefone: '' }]) {
     eventos.length = 0;
     const pedidoFalso = { id: p.id, status: 'PRONTO_RETIRADA', cliente };
@@ -212,16 +213,11 @@ test('pedido sem cliente ou sem telefone: FALHOU visível, sem chamar o mensagei
     svc.aoMudarStatus(pedidoFalso, B);
     await svc.aguardarPendentes();
     await new Promise((r) => setImmediate(r));
-    assert.equal(eventos.length, 1);
-    assert.equal(eventos[0].situacao, 'FALHOU');
-    assert.equal(eventos[0].erro, 'Pedido sem telefone do cliente');
-    const r = await svc.reenviar(B, p.id);
-    assert.equal(r.situacao, 'FALHOU');
-    assert.equal(r.erro, 'Pedido sem telefone do cliente');
-    assert.equal(r.telefone, '');
-    assert.equal(eventos.length, 2);
+    assert.equal(eventos.length, 0);
+    await assert.rejects(() => svc.reenviar(B, p.id), (e) => e.status === 409 && /sem telefone/.test(e.message));
   }
   assert.equal(app.mensageiro.enviadas.length, 0);
+  assert.equal(app.app.repositories.notificacoes.listarPorPedido(p.id).length, antes);
   assert.equal(s.pedidos.obter(A, p.id).status, 'PRONTO_RETIRADA');
 });
 

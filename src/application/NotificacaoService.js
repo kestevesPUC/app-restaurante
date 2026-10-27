@@ -10,12 +10,6 @@ const TIPO_POR_STATUS = Object.freeze({ PRONTO_RETIRADA: 'RETIRADA', PRONTO_ENTR
 const CHAVE_MODELO = Object.freeze({ RETIRADA: 'whatsapp.modelo_retirada', ENTREGA: 'whatsapp.modelo_entrega' });
 const NIVEIS = ['A', 'B'];
 
-class SemTelefone extends Error {
-  constructor() {
-    super('Pedido sem telefone do cliente');
-  }
-}
-
 function exigirNivel(user) {
   if (!user || !NIVEIS.includes(user.nivel)) throw new ForbiddenError('Sem permissão para notificações');
 }
@@ -92,6 +86,7 @@ class NotificacaoService {
     if (!pedido) throw new NotFoundError('Pedido não encontrado');
     const tipo = TIPO_POR_STATUS[pedido.status];
     if (!tipo) throw new ConflictError('Só é possível reenviar quando o pedido está pronto');
+    if (!pedido.cliente?.telefone?.trim()) throw new ConflictError('Pedido sem telefone do cliente: não há para quem enviar');
     const linha = await this.#enviar(pedido, tipo, { automatica: false, user });
     if (!linha) throw new ExternalServiceError('Não foi possível registrar a notificação');
     this.audit.record({
@@ -120,16 +115,15 @@ class NotificacaoService {
   async #enviar(pedido, tipo, { automatica, user }) {
     try {
       const telefone = typeof pedido.cliente?.telefone === 'string' ? pedido.cliente.telefone.trim() : '';
+      if (!telefone) return null; // sem telefone não há aviso a enviar (nem falha a registrar)
       const texto = this.renderizar(this.config.get(CHAVE_MODELO[tipo]), { nome: pedido.cliente?.nome, numero: pedido.senha ?? pedido.id });
       let situacao = 'ENVIADA';
       let erro = null;
       try {
-        // pedido sem telefone: não chama o mensageiro, mas a falha fica registrada e visível
-        if (!telefone) throw new SemTelefone();
         await comLimite(Promise.resolve().then(() => this.mensageiro.enviar({ telefoneE164: telefone, texto })), this.timeoutMs);
       } catch (error) {
         situacao = 'FALHOU';
-        erro = error instanceof SemTelefone || error instanceof MensageiroError ? error.message : new MensageiroError('ERRO_ENVIO').message;
+        erro = error instanceof MensageiroError ? error.message : new MensageiroError('ERRO_ENVIO').message;
         this.logger?.error?.(error);
       }
       const linha = this.repository.insert({

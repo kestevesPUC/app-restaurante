@@ -77,16 +77,18 @@ test('atualizarRascunho substitui os itens inteiros e só vale em ABERTO', () =>
   assert.equal(status(() => s.pedidos.atualizarRascunho(B, p.id, { itens: [prato(c.burger)] })), 409);
 });
 
-test('confirmar sem nome ou sem telefone do cliente → 400', () => {
+test('confirmar sem nome do cliente → 400; sem telefone confirma sem cadastrar cliente', () => {
   const c = cardapio();
   const semCliente = rascunho([prato(c.burger)], null);
+  const e = erroDe(() => s.pedidos.confirmar(B, semCliente.id));
+  assert.equal(e.status, 400);
+  assert.equal(e.message, 'Informe o nome do cliente');
+  assert.equal(s.pedidos.obter(B, semCliente.id).status, 'ABERTO');
   const semFone = rascunho([prato(c.burger)], { nome: 'Ana' });
-  for (const p of [semCliente, semFone]) {
-    const e = erroDe(() => s.pedidos.confirmar(B, p.id));
-    assert.equal(e.status, 400);
-    assert.equal(e.message, 'Informe o nome e o telefone do cliente');
-    assert.equal(s.pedidos.obter(B, p.id).status, 'ABERTO');
-  }
+  const ok = s.pedidos.confirmar(B, semFone.id);
+  assert.equal(ok.status, 'RECEBIDO');
+  assert.equal(ok.cliente.id, null);
+  assert.equal(ok.cliente.telefone, null);
 });
 
 test('confirmar sem itens → 400', () => {
