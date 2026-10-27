@@ -5,12 +5,12 @@ const AppError = require('../../domain/errors/AppError');
 const MAX_BODY_BYTES = 1_000_000;
 
 /** Lê o corpo JSON (sempre um objeto). Corpo vazio vira `{}`. */
-async function readJsonBody(req) {
+async function readJsonBody(req, maxBytes = MAX_BODY_BYTES) {
   const chunks = [];
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw new AppError('Requisição muito grande', 413);
+    if (size > maxBytes) throw new AppError('Requisição muito grande', 413);
     chunks.push(chunk);
   }
   if (!chunks.length) return {};
