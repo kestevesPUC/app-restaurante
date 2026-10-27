@@ -302,4 +302,25 @@ module.exports = [
       `);
     },
   },
+  {
+    version: 7,
+    // Módulo PIX: chaves cadastradas (uma marcada como padrão) e a forma de pagamento informada ao finalizar o pedido.
+    up(db) {
+      db.exec(`
+        CREATE TABLE chaves_pix (
+          id INTEGER PRIMARY KEY,
+          descricao TEXT NOT NULL,
+          tipo TEXT NOT NULL CHECK (tipo IN ('CPF','CNPJ','EMAIL','TELEFONE','ALEATORIA')),
+          chave TEXT NOT NULL UNIQUE,
+          nome_recebedor TEXT NOT NULL,
+          cidade TEXT NOT NULL,
+          padrao INTEGER NOT NULL DEFAULT 0 CHECK (padrao IN (0,1)),
+          criado_em TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX ux_chaves_pix_padrao ON chaves_pix(padrao) WHERE padrao = 1;
+        ALTER TABLE pedidos ADD COLUMN forma_pagamento TEXT
+          CHECK (forma_pagamento IN ('DINHEIRO','PIX','CARTAO_CREDITO','CARTAO_DEBITO'));
+      `);
+    },
+  },
 ];

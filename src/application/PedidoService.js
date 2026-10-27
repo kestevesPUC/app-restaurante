@@ -14,6 +14,7 @@ const { dataLocalDe } = require('./ConsultaDePedidos');
 const MOTIVO_MAX = 200;
 const CLIENTE_NOME_MAX = 80;
 const NIVEIS_PEDIDO = ['A', 'B'];
+const FORMAS_PAGAMENTO = ['DINHEIRO', 'PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO'];
 const ALVOS_MUDAR_STATUS = ['EM_PREPARO', 'PRONTO_RETIRADA', 'PRONTO_ENTREGA', 'FINALIZADO'];
 
 function motivoDe(valor) {
@@ -140,11 +141,13 @@ class PedidoService {
   }
 
   /** Status operacional (cozinha/finalização). Confirmar, reabrir e cancelar têm métodos próprios. */
-  mudarStatus(user, id, status) {
+  mudarStatus(user, id, status, { formaPagamento } = {}) {
     if (!ALVOS_MUDAR_STATUS.includes(status)) throw new ValidationError('Use confirmar, reabrir ou cancelar');
+    if (formaPagamento !== undefined && status !== 'FINALIZADO') throw new ValidationError('A forma de pagamento só é informada ao finalizar');
+    if (formaPagamento !== undefined && !FORMAS_PAGAMENTO.includes(formaPagamento)) throw new ValidationError('Forma de pagamento inválida');
     return this.#transitar(user, id, status, 'mudar_status', `passou para ${status}`, (antes) => {
       if (!podeMudarStatus(user?.nivel, antes.status, status)) throw new ForbiddenError('Sem permissão para esta mudança de status');
-      return {};
+      return formaPagamento ? { formaPagamento } : {};
     });
   }
 

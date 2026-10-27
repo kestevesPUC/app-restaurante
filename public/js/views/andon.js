@@ -2,6 +2,8 @@ import { api } from '../api.js';
 import { esc } from '../format.js';
 import { view, notify, fail } from '../ui.js';
 import { reenviarAviso } from './reenviarAviso.js';
+import { finalizarPedido } from '../components/finalizarPedido.js';
+import { icon } from '../icons.js';
 import { state } from '../state.js';
 
 const COLUNAS = [
@@ -17,7 +19,7 @@ let ouvinte = null; // um único ouvinte de eventos, mesmo com recarregamentos d
 function botoes(p, nivel) {
   const b = (status, rotulo, alt = false) => `<button type="button" class="btn${alt ? ' alt' : ''} sm" data-id="${p.id}" data-status="${status}">${rotulo}</button>`;
   const reenviar = nivel !== 'C' && p.status.startsWith('PRONTO')
-    ? ` <button type="button" class="btn alt sm" data-id="${p.id}" data-reenviar="1">Reenviar WhatsApp</button>` : '';
+    ? ` <button type="button" class="btn alt sm" data-id="${p.id}" data-reenviar="1">${icon('whatsapp')} Reenviar WhatsApp</button>` : '';
   if (nivel === 'B') return p.status.startsWith('PRONTO') ? `${b('FINALIZADO', 'Finalizar')}${reenviar}` : '';
   if (p.status === 'RECEBIDO') return b('EM_PREPARO', 'Iniciar preparo');
   if (p.status === 'EM_PREPARO') return `${b('PRONTO_RETIRADA', 'Pronto — retirada')} ${b('PRONTO_ENTREGA', 'Pronto — entrega', true)}`;
@@ -54,6 +56,11 @@ export async function viewAndon() {
     if (re) { await reenviarAviso(re); return; }
     const b = e.target.closest('[data-status]');
     if (!b) return;
+    // Atendente/administrador: finalizar pede a forma de pagamento (e mostra o QR Code se for PIX).
+    if (b.dataset.status === 'FINALIZADO' && state.me?.nivel !== 'C') {
+      finalizarPedido(Number(b.dataset.id), () => { notify('Pedido finalizado'); recarregar(); }).catch(fail);
+      return;
+    }
     b.disabled = true;
     try {
       await api.post(`/api/pedidos/${b.dataset.id}/status`, { status: b.dataset.status });

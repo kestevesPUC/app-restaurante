@@ -22,11 +22,12 @@ import { viewPedidos } from './views/pedidos.js';
 import { viewWhatsApp } from './views/whatsapp.js';
 import { viewClientes } from './views/clientes.js';
 import { viewRelatorios } from './views/relatorios.js';
+import { viewPix } from './views/pix.js';
 
 const root = document.getElementById('app');
 
 // Telas por id de rota (os ids e as permissões ficam em ROTAS, em niveis.js).
-const VIEWS = { 'pedido-novo': viewPedidoNovo, pedidos: viewPedidos, whatsapp: viewWhatsApp, clientes: viewClientes, relatorios: viewRelatorios, pratos: viewPratos, ingredientes: viewIngredientes, categorias: viewCategorias, usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
+const VIEWS = { 'pedido-novo': viewPedidoNovo, pedidos: viewPedidos, whatsapp: viewWhatsApp, clientes: viewClientes, pix: viewPix, relatorios: viewRelatorios, pratos: viewPratos, ingredientes: viewIngredientes, categorias: viewCategorias, usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
 
 let eventos = null;
 

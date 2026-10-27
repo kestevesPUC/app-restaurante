@@ -65,7 +65,7 @@ class PedidoController {
     router.add('POST', '/api/pedidos/:id/cancelar', (ctx) => s.cancelar(ctx.user, id(ctx), ctx.body.motivo));
     router.add('POST', '/api/pedidos/:id/status', (ctx) => {
       const numero = id(ctx);
-      return s.mudarStatus(ctx.user, numero, statusValido(ctx.body.status));
+      return s.mudarStatus(ctx.user, numero, statusValido(ctx.body.status), { formaPagamento: ctx.body.formaPagamento });
     }, { cozinha: true });
     router.add('GET', '/api/cozinha', (ctx) => s.listarCozinha(ctx.user), { cozinha: true });
   }
