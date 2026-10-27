@@ -79,13 +79,19 @@ input::placeholder{color:var(--mute)}
 .pw-toggle[aria-pressed=true]{color:var(--brand)}
 
 /* Botões */
-.btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:600;padding:9px 16px;min-height:40px;border-radius:9px;border:1px solid var(--brand);background:var(--brand);color:var(--brand-ink);cursor:pointer;text-decoration:none;transition:filter .15s,background .15s}
+.btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:600;padding:9px 16px;min-height:40px;border-radius:9px;border:1px solid var(--btn,var(--brand));background:var(--btn,var(--brand));color:var(--btn-ink,var(--brand-ink));cursor:pointer;text-decoration:none;transition:filter .15s,background .15s}
 .btn:hover{filter:brightness(1.08)}.btn:active{filter:brightness(.95)}
 .btn.alt{background:transparent;color:var(--brand);border-color:var(--line-strong)}.btn.alt:hover{background:var(--brand-soft);filter:none}
 .btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
 .btn.sm{padding:5px 10px;min-height:40px;font-size:13px;font-weight:500}
 a.btn svg.i,button.btn svg.i{width:16px;height:16px}
 .actions{display:flex;flex-wrap:nowrap;gap:6px;justify-content:flex-end}
+
+/* Aparência */
+.cores{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:12px 0}
+.cores label{flex-direction:row;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.cores input[type=color]{width:48px;height:40px;padding:2px;cursor:pointer;flex:none}
+.cores small{display:block;font-weight:400}
 
 /* Tabelas */
 .wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}

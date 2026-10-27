@@ -24,6 +24,7 @@ export const ROTAS = [
   { id: 'clientes', rotulo: 'Clientes', subtitulo: 'Clientes cadastrados e histórico de compras', icone: 'users', grupo: 'Gestão', niveis: ['A'] },
   { id: 'relatorios', rotulo: 'Relatórios', subtitulo: 'Vendas e indicadores por período', icone: 'download', grupo: 'Gestão', niveis: ['A'] },
   { id: 'auditoria', rotulo: 'Auditoria', subtitulo: 'Quem fez o quê e quando', icone: 'shield', grupo: 'Gestão', niveis: ['A'] },
+  { id: 'aparencia', rotulo: 'Aparência', subtitulo: 'Tema e cores do sistema', icone: 'palette', grupo: '', niveis: ['A', 'B'] },
   { id: 'sobre', rotulo: 'Sobre', subtitulo: 'O sistema', icone: 'info', grupo: '', niveis: ['A', 'B'] },
 ];
 
