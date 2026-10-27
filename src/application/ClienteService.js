@@ -4,6 +4,7 @@ const ForbiddenError = require('../domain/errors/ForbiddenError');
 const NotFoundError = require('../domain/errors/NotFoundError');
 const { normalizarTelefone } = require('../domain/phone');
 const { normalizarNome } = require('../domain/cardapio/validators');
+const { formatarNome } = require('../domain/nomePessoa');
 
 const NOME_MAX = 80;
 const LIMITE_MAX = 200;
@@ -17,7 +18,7 @@ function validarNomeCliente(valor) {
   const nome = typeof valor === 'string' ? valor.trim() : '';
   if (!nome) throw new ValidationError('Informe o nome do cliente');
   if ([...nome].length > NOME_MAX) throw new ValidationError(`O nome do cliente deve ter no máximo ${NOME_MAX} caracteres`);
-  return nome;
+  return formatarNome(nome);
 }
 
 /** Cadastro de clientes por telefone. `registrar` é síncrono e não abre transação: roda dentro da transação do pedido. */

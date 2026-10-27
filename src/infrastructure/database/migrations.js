@@ -290,4 +290,16 @@ module.exports = [
       `);
     },
   },
+  {
+    version: 6,
+    // Senha: número curto do pedido, sequencial por dia (1, 2, 3…), atribuído ao confirmar e mantido se reaberto.
+    up(db) {
+      db.exec(`
+        ALTER TABLE pedidos ADD COLUMN senha INTEGER;
+        UPDATE pedidos SET senha = (SELECT COUNT(*) FROM pedidos o WHERE o.data_local = pedidos.data_local AND o.confirmado_em IS NOT NULL AND o.id <= pedidos.id)
+          WHERE confirmado_em IS NOT NULL;
+        CREATE UNIQUE INDEX ux_pedidos_senha_dia ON pedidos(data_local, senha) WHERE senha IS NOT NULL;
+      `);
+    },
+  },
 ];

@@ -89,6 +89,7 @@ class ConsultaDePedidos {
     const temCliente = l.clienteNome !== null || l.clienteTelefone !== null;
     return {
       id: l.id,
+      senha: l.senha,
       status: l.status,
       cliente: temCliente ? { id: l.clienteId, nome: l.clienteNome, telefone: l.clienteTelefone } : null,
       itens,

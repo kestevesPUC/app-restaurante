@@ -78,5 +78,5 @@ test('GET/PUT /api/config/whatsapp: só A; parciais; validações', async () => 
 test('o modelo editado é usado no próximo envio', async () => {
   await app.request('PUT', '/api/config/whatsapp', { user: 'ADM', body: { modeloRetirada: 'Oi {nome}, nº {numero}' } });
   const r = await app.request('POST', url('/reenviar'), { user: 'ADM' });
-  assert.equal(r.body.texto, `Oi Ana, nº ${pedido.id}`);
+  assert.equal(r.body.texto, `Oi *Ana*, nº ${pedido.id}`);
 });

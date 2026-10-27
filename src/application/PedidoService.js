@@ -1,4 +1,5 @@
 'use strict';
+const { formatarNome } = require('../domain/nomePessoa');
 const NotFoundError = require('../domain/errors/NotFoundError');
 const ConflictError = require('../domain/errors/ConflictError');
 const ValidationError = require('../domain/errors/ValidationError');
@@ -39,7 +40,7 @@ function clienteDe(valor) {
   const texto = typeof nome === 'string' ? nome.trim() : '';
   if ([...texto].length > CLIENTE_NOME_MAX) throw new ValidationError(`O nome do cliente deve ter no máximo ${CLIENTE_NOME_MAX} caracteres`);
   const vazio = telefone === undefined || telefone === null || (typeof telefone === 'string' && !telefone.trim());
-  return { clienteNome: texto || null, clienteTelefone: vazio ? null : normalizarTelefone(telefone) };
+  return { clienteNome: formatarNome(texto) || null, clienteTelefone: vazio ? null : normalizarTelefone(telefone) };
 }
 
 /**
@@ -116,6 +117,7 @@ class PedidoService {
       return {
         clienteId: cliente.id, clienteNome: cliente.nome, clienteTelefone: cliente.telefone,
         tempoEstimadoMin: estimarPreparo(itens, this.config.get('cozinha.estimativa')), confirmadoEm: this.#agoraIso(),
+        senha: antes.senha ?? this.repository.proximaSenha(antes.dataLocal),
       };
     });
   }

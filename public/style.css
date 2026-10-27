@@ -194,3 +194,28 @@ fieldset.plain{border:0;margin:0;padding:0;min-width:0}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media print{.side,.theme-fab{display:none!important}.shell{display:block}body{background:#fff;color:#000}.card{border:0;box-shadow:none;padding:0}}
+
+/* Novo pedido */
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.pedido-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:18px;align-items:start}
+.pedido-cart{position:sticky;top:12px}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.menu-item{display:flex;flex-direction:column;justify-content:space-between;gap:6px;min-height:76px;text-align:left;font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer}
+.menu-item:hover{background:var(--brand-soft);border-color:var(--brand)}.menu-item span{color:var(--mute)}
+.cart-list{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:10px}
+.cart-list li{padding-bottom:10px;border-bottom:1px solid var(--line)}.cart-list small{display:block;color:var(--mute)}
+.cart-line{display:flex;justify-content:space-between;gap:8px}.cart-ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.cart-total{display:flex;justify-content:space-between;font-size:18px;margin:14px 0}
+label.check{display:flex;gap:8px;align-items:center;margin:6px 0}
+@media (max-width:900px){.pedido-layout{grid-template-columns:1fr}.pedido-cart{position:static}}
+
+/* Andon */
+.andon{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;align-items:start}
+.andon-card{border:1px solid var(--line-strong);border-radius:10px;padding:12px;margin-bottom:12px}
+.andon-card header{display:flex;gap:10px;align-items:baseline;justify-content:space-between}
+.andon-card ul{list-style:none;margin:8px 0;padding:0}.andon-card li small{display:block;color:var(--mute)}
+
+/* Crédito do desenvolvedor */
+.credito{color:inherit;opacity:.75;font-size:12px;text-decoration:none;padding:4px 10px}
+.credito:hover,.credito:focus-visible{opacity:1;text-decoration:underline}
+dl.detail .credito{opacity:1;font-size:inherit;padding:0;color:var(--brand)}

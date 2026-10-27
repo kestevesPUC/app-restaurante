@@ -12,13 +12,18 @@ export const nivelNome = (id) => NIVEIS.find((n) => n.id === id)?.nome || id;
  * Ainda por vir (tarefas seguintes): pedido-novo, pedidos, mesas, fila, andon no menu, configuracoes.
  */
 export const ROTAS = [
+  { id: 'pedido-novo', rotulo: 'Novo pedido', subtitulo: 'Monte o pedido do cliente e envie para a cozinha', icone: 'plus', grupo: 'Atendimento', niveis: ['A', 'B'] },
+  { id: 'pedidos', rotulo: 'Pedidos', subtitulo: 'Pedidos de hoje', icone: 'chef', grupo: 'Atendimento', niveis: ['A', 'B'] },
+  { id: 'andon', rotulo: 'Andon da cozinha', subtitulo: 'Pedidos em preparo', icone: 'chef', grupo: 'Atendimento', niveis: ['A', 'B', 'C'] },
   { id: 'pratos', rotulo: 'Pratos', subtitulo: 'Cardápio: pratos, preços, fotos e ingredientes', icone: 'dish', grupo: 'Cardápio', niveis: ['A', 'B'] },
   { id: 'ingredientes', rotulo: 'Ingredientes', subtitulo: 'Ingredientes e preço de adicional', icone: 'leaf', grupo: 'Cardápio', niveis: ['A', 'B'] },
   { id: 'categorias', rotulo: 'Categorias', subtitulo: 'Seções do cardápio e destino da cozinha', icone: 'tag', grupo: 'Cardápio', niveis: ['A', 'B'] },
   { id: 'usuarios', rotulo: 'Usuários', subtitulo: 'Acesso ao sistema', icone: 'users', grupo: 'Gestão', niveis: ['A'] },
+  { id: 'whatsapp', rotulo: 'WhatsApp', subtitulo: 'Conexão para avisar o cliente quando o pedido ficar pronto', icone: 'info', grupo: 'Gestão', niveis: ['A'] },
+  { id: 'clientes', rotulo: 'Clientes', subtitulo: 'Clientes cadastrados e histórico de compras', icone: 'users', grupo: 'Gestão', niveis: ['A'] },
+  { id: 'relatorios', rotulo: 'Relatórios', subtitulo: 'Vendas e indicadores por período', icone: 'download', grupo: 'Gestão', niveis: ['A'] },
   { id: 'auditoria', rotulo: 'Auditoria', subtitulo: 'Quem fez o quê e quando', icone: 'shield', grupo: 'Gestão', niveis: ['A'] },
   { id: 'sobre', rotulo: 'Sobre', subtitulo: 'O sistema', icone: 'info', grupo: '', niveis: ['A', 'B'] },
-  { id: 'andon', rotulo: 'Andon da cozinha', subtitulo: 'Pedidos em preparo', icone: 'chef', grupo: '', niveis: ['A', 'B', 'C'], menu: false },
 ];
 
 /** Rotas que o nível pode abrir. */

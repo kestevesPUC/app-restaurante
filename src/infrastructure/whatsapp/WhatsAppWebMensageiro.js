@@ -156,6 +156,13 @@ class WhatsAppWebMensageiro {
     } catch (error) {
       this.logger?.error?.(error);
     }
+    if (estado === 'CONECTADO') {
+      try {
+        this.aoConectar?.();
+      } catch (error) {
+        this.logger?.error?.(error);
+      }
+    }
   }
 }
 

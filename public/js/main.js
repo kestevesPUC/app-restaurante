@@ -8,6 +8,7 @@ import { notify, fail } from './ui.js';
 import { ROTAS, menuPara, nivelNome, podeAcessar, rotaInicial } from './niveis.js';
 import { conectar } from './events.js';
 import { initPasswordToggles } from './components/passwordToggle.js';
+import { initMasks } from './mask.js';
 import { renderLogin, renderTrocaSenha } from './views/login.js';
 import { viewUsuarios } from './views/usuarios.js';
 import { viewAuditoria } from './views/auditoria.js';
@@ -16,11 +17,16 @@ import { viewAndon } from './views/andon.js';
 import { viewPratos } from './views/pratos.js';
 import { viewIngredientes } from './views/ingredientes.js';
 import { viewCategorias } from './views/categorias.js';
+import { viewPedidoNovo } from './views/pedidoNovo.js';
+import { viewPedidos } from './views/pedidos.js';
+import { viewWhatsApp } from './views/whatsapp.js';
+import { viewClientes } from './views/clientes.js';
+import { viewRelatorios } from './views/relatorios.js';
 
 const root = document.getElementById('app');
 
 // Telas por id de rota (os ids e as permissões ficam em ROTAS, em niveis.js).
-const VIEWS = { pratos: viewPratos, ingredientes: viewIngredientes, categorias: viewCategorias, usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
+const VIEWS = { 'pedido-novo': viewPedidoNovo, pedidos: viewPedidos, whatsapp: viewWhatsApp, clientes: viewClientes, relatorios: viewRelatorios, pratos: viewPratos, ingredientes: viewIngredientes, categorias: viewCategorias, usuarios: viewUsuarios, auditoria: viewAuditoria, sobre: viewSobre, andon: viewAndon };
 
 let eventos = null;
 
@@ -43,7 +49,7 @@ function renderShell() {
     ? `<aside class="side"><div class="brand"><span class="logo"><img src="/img/logo.svg" alt="" width="36" height="36"></span><div><b>PDV Restaurante</b><small>Pedidos e cozinha</small></div></div>
       <nav aria-label="Principal">${menuHtml(me.nivel)}</nav>
       <div class="foot"><div class="who"><span class="avatar" aria-hidden="true">${esc(me.usuario.slice(0, 2))}</span><span>${esc(me.usuario)} · ${esc(nivelNome(me.nivel))}</span></div>
-      ${themeButton()}${sair}</div></aside>`
+      ${themeButton()}${sair}<a class="credito" href="https://kaio-gomes-site.vercel.app" target="_blank" rel="noopener noreferrer">Desenvolvido por Kaio Gomes</a></div></aside>`
     : '';
   root.innerHTML = `<div class="shell${comMenu ? '' : ' solo'}">${lateral}
     <main class="content"><div class="page-head"><div><h1 id="ptitle" tabindex="-1"></h1><p id="psub"></p></div>
@@ -126,6 +132,13 @@ function iniciar() {
 
 window.addEventListener('hashchange', mostrar);
 
+// Aviso ao cliente que não saiu (ex.: WhatsApp desconectado): mostra ao atendente, que pode reenviar.
+window.addEventListener('pdv:evento', ({ detail }) => {
+  if (detail.tipo === 'notificacao' && detail.dados?.situacao === 'FALHOU') {
+    notify(`Não foi possível avisar o cliente do pedido ${detail.dados.pedidoId}: ${detail.dados.erro}. Use "Reenviar WhatsApp".`, 'err');
+  }
+});
+
 // Sessão expirada (401 em qualquer chamada): volta ao login com aviso.
 window.addEventListener(SESSAO_EXPIRADA, () => {
   if (state.me) voltarAoLogin('Sua sessão expirou. Entre novamente.');
@@ -143,4 +156,5 @@ document.addEventListener('keydown', (event) => {
 
 restoreTheme();
 initPasswordToggles();
+initMasks();
 api.get('/api/me').then(entrarCom).catch(() => renderLogin(root, entrarCom));

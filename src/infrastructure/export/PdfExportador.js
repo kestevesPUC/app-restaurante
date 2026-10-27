@@ -1,5 +1,6 @@
 'use strict';
 const PDFDocument = require('pdfkit');
+const { mascararTelefone } = require('../../domain/phone');
 const { duracao, data, reais, totaisExibiveis, periodoTexto, geradoEm } = require('./formatosRelatorio');
 
 const MARGEM = 30;
@@ -80,6 +81,7 @@ class PdfExportador {
       case 'dinheiro': return reais(v);
       case 'duracao': return duracao(v);
       case 'data': return data(v);
+      case 'telefone': return mascararTelefone(v);
       case 'inteiro': return String(Number(v));
       default: return String(v);
     }

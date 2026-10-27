@@ -66,7 +66,7 @@ test('catálogo: 11 tipos com colunas tipadas; inexistente → undefined', () =>
   const chaves = TIPOS.map((t) => t.tipo);
   assert.deepEqual(chaves, ['pedidos-periodo', 'pedidos-finalizados', 'pedidos-cancelados', 'tempo-medio-preparo', 'faturamento', 'ticket-medio',
     'bebidas-mais-vendidas', 'estoque-atual', 'estoque-critico', 'clientes-frequentes', 'clientes-maior-gasto']);
-  for (const t of TIPOS) for (const c of t.colunas) assert.ok(['texto', 'inteiro', 'dinheiro', 'duracao', 'data'].includes(c.tipo), `${t.tipo}.${c.chave}`);
+  for (const t of TIPOS) for (const c of t.colunas) assert.ok(['texto', 'inteiro', 'dinheiro', 'duracao', 'data', 'telefone'].includes(c.tipo), `${t.tipo}.${c.chave}`);
   assert.equal(obterTipo('nada'), undefined);
   assert.equal(obterTipo('__proto__'), undefined);
 });

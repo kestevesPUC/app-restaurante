@@ -4,6 +4,7 @@ const ConflictError = require('../domain/errors/ConflictError');
 const ForbiddenError = require('../domain/errors/ForbiddenError');
 const ExternalServiceError = require('../domain/errors/ExternalServiceError');
 const MensageiroError = require('../domain/errors/MensageiroError');
+const { formatarNome } = require('../domain/nomePessoa');
 
 const TIPO_POR_STATUS = Object.freeze({ PRONTO_RETIRADA: 'RETIRADA', PRONTO_ENTREGA: 'ENTREGA' });
 const CHAVE_MODELO = Object.freeze({ RETIRADA: 'whatsapp.modelo_retirada', ENTREGA: 'whatsapp.modelo_entrega' });
@@ -50,6 +51,23 @@ class NotificacaoService {
     this.pendentes = new Set();
   }
 
+  /** Chamado quando o WhatsApp conecta: avisa os clientes cujos pedidos ficaram prontos enquanto ele estava fora.
+   * Reenvia (em segundo plano, nunca lança) os avisos que falharam por falta de conexão e ainda fazem sentido. */
+  reenviarPendentes() {
+    try {
+      for (const id of this.repository.pedidosComAvisoPendente()) {
+        const pedido = this.carregarPedido(id);
+        const tipo = TIPO_POR_STATUS[pedido?.status];
+        if (!tipo) continue;
+        const envio = this.#enviar(pedido, tipo, { automatica: true, user: null }).catch((error) => this.logger?.error?.(error));
+        this.pendentes.add(envio);
+        envio.finally(() => this.pendentes.delete(envio));
+      }
+    } catch (error) {
+      this.logger?.error?.(error);
+    }
+  }
+
   /** Porta `aposMudarStatus` do PedidoService. Não bloqueia e nunca lança. */
   aoMudarStatus(pedido, user) {
     try {
@@ -88,10 +106,13 @@ class NotificacaoService {
     return this.repository.listarPorPedido(Number(pedidoId));
   }
 
-  /** Substitui `{nome}` (primeiro nome ou "cliente") e `{numero}`; marcadores desconhecidos ficam como estão. */
+  /**
+   * Substitui `{nome}` (primeiro nome bem formatado, em negrito do WhatsApp; "cliente" sem negrito) e `{numero}`.
+   * Marcadores desconhecidos ficam como estão.
+   */
   renderizar(modelo, { nome, numero }) {
-    const primeiro = typeof nome === 'string' ? nome.trim().split(/\s+/)[0] : '';
-    const valores = { nome: primeiro || 'cliente', numero: String(numero) };
+    const primeiro = typeof nome === 'string' ? formatarNome(nome).split(' ')[0].replace(/\*/g, '') : '';
+    const valores = { nome: primeiro ? `*${primeiro}*` : 'cliente', numero: String(numero) };
     return modelo.replace(/\{(\w+)\}/g, (marcador, chave) => (Object.hasOwn(valores, chave) ? valores[chave] : marcador));
   }
 
@@ -99,7 +120,7 @@ class NotificacaoService {
   async #enviar(pedido, tipo, { automatica, user }) {
     try {
       const telefone = typeof pedido.cliente?.telefone === 'string' ? pedido.cliente.telefone.trim() : '';
-      const texto = this.renderizar(this.config.get(CHAVE_MODELO[tipo]), { nome: pedido.cliente?.nome, numero: pedido.id });
+      const texto = this.renderizar(this.config.get(CHAVE_MODELO[tipo]), { nome: pedido.cliente?.nome, numero: pedido.senha ?? pedido.id });
       let situacao = 'ENVIADA';
       let erro = null;
       try {

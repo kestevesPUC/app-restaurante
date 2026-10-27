@@ -52,7 +52,7 @@ export async function viewIngredientes() {
 function openForm(reload, ing = null) {
   openDialog(`<h2>${ing ? `Editar ingrediente ${esc(ing.nome)}` : 'Novo ingrediente'}</h2><div class="form-grid">
     <label>Nome<input name="nome" maxlength="60" required autocomplete="off" autofocus value="${esc(ing?.nome ?? '')}"></label>
-    <label>Preço de adicional (R$)<input name="preco" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="${esc(centsParaReais(ing?.precoAdicionalCents ?? 0))}"></label>
+    <label>Preço de adicional (R$)<input name="preco" data-mask="dinheiro" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="${esc(centsParaReais(ing?.precoAdicionalCents ?? 0))}"></label>
     <label class="check"><input type="checkbox" name="podeSerAdicional" ${ing?.podeSerAdicional ? 'checked' : ''}>Pode ser adicional</label>
     <label class="check"><input type="checkbox" name="ativo" ${ing?.ativo ?? true ? 'checked' : ''}>Ativo</label>
     </div><p><small>Cobrado quando o cliente pede este ingrediente a mais. Use vírgula para os centavos (ex.: 3,50).</small></p>`,

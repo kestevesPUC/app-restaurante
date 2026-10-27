@@ -4,3 +4,5 @@ data/
 .env
 whatsapp-session/
 .superpowers/
+/build
+.wwebjs_cache/

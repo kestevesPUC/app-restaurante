@@ -29,6 +29,14 @@ class NotificacaoRepository {
     return row ? this.#entidade(row) : null;
   }
 
+  /** Pedidos ainda prontos cujo aviso automático falhou só porque o WhatsApp estava desconectado (e que depois não foram avisados). */
+  pedidosComAvisoPendente() {
+    return this.db.prepare(`SELECT DISTINCT n.pedido_id AS id FROM notificacoes_whatsapp n JOIN pedidos p ON p.id = n.pedido_id
+      WHERE p.status IN ('PRONTO_RETIRADA','PRONTO_ENTREGA') AND n.situacao = 'FALHOU' AND n.erro LIKE '%não está conectado%'
+        AND NOT EXISTS (SELECT 1 FROM notificacoes_whatsapp o WHERE o.pedido_id = n.pedido_id AND o.situacao = 'ENVIADA' AND o.id > n.id)`)
+      .all().map((r) => r.id);
+  }
+
   /** Mais recente primeiro. */
   listarPorPedido(pedidoId) {
     return this.db.prepare(`SELECT ${COLUNAS} FROM notificacoes_whatsapp WHERE pedido_id = ? ORDER BY id DESC`).all(pedidoId).map((r) => this.#entidade(r));

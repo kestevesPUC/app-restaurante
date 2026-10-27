@@ -151,6 +151,8 @@ function buildApplication({
     },
     config: services.config, audit, bus, relogio, logger, ...(notificacaoTimeoutMs && { timeoutMs: notificacaoTimeoutMs }),
   });
+  // Ao (re)conectar, o WhatsApp real reenvia os avisos que falharam enquanto estava fora.
+  if (whatsappReal) mensageiro.aoConectar = () => services.notificacoes.reenviarPendentes();
   services.pedidos = new PedidoService({
     db, repository: repositories.pedidos, estoque: services.estoque, clientes: services.clientes, config: services.config, audit, bus, relogio, logger,
     consulta, aposMudarStatus,

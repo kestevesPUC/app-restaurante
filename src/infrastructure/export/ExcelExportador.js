@@ -1,4 +1,5 @@
 'use strict';
+const { mascararTelefone } = require('../../domain/phone');
 const ExcelJS = require('exceljs');
 const textoSeguro = require('../csv/textoSeguro');
 const { duracao, data, totaisExibiveis, periodoTexto, geradoEm } = require('./formatosRelatorio');
@@ -47,6 +48,7 @@ class ExcelExportador {
       case 'inteiro': return Number(v);
       case 'duracao': return duracao(v);
       case 'data': return textoSeguro(data(v));
+      case 'telefone': return textoSeguro(mascararTelefone(v));
       default: return textoSeguro(v);
     }
   }

@@ -43,7 +43,7 @@ test('PRONTO_RETIRADA envia exatamente o texto de retirada para o telefone do pe
   const [env] = app.mensageiro.enviadas;
   assert.equal(app.mensageiro.enviadas.length, 1);
   assert.equal(env.telefoneE164, '+5511999998888');
-  assert.equal(env.texto, `Olá, João!\n\nSeu pedido nº ${p.id} está pronto para retirada.\n\nAgradecemos a preferência.`);
+  assert.equal(env.texto, `Olá, *João*!\n\nSeu pedido nº ${p.id} está pronto para retirada.\n\nAgradecemos a preferência.`);
   const [l] = linhas(p.id);
   assert.deepEqual([l.tipo, l.situacao, l.erro, l.automatica, l.enviada_por], ['RETIRADA', 'ENVIADA', null, 1, null]);
   assert.deepEqual(eventos, [{ id: l.id, pedidoId: p.id, situacao: 'ENVIADA', erro: null, automatica: true }]);
@@ -55,7 +55,7 @@ test('PRONTO_ENTREGA envia o texto de entrega; EM_PREPARO e FINALIZADO não envi
   assert.equal(app.mensageiro.enviadas.length, 0);
   s.pedidos.mudarStatus(A, p.id, 'PRONTO_ENTREGA');
   await s.notificacoes.aguardarPendentes();
-  assert.equal(app.mensageiro.enviadas[0].texto, `Olá, João!\n\nSeu pedido nº ${p.id} foi finalizado e está pronto para entrega.\n\nAgradecemos a preferência.`);
+  assert.equal(app.mensageiro.enviadas[0].texto, `Olá, *João*!\n\nSeu pedido nº ${p.id} foi finalizado e está pronto para entrega.\n\nAgradecemos a preferência.`);
   s.pedidos.mudarStatus(A, p.id, 'FINALIZADO');
   await s.notificacoes.aguardarPendentes();
   assert.equal(app.mensageiro.enviadas.length, 1);
@@ -151,8 +151,8 @@ test('desfazer e voltar a PRONTO envia de novo (sem deduplicação)', async () =
 
 test('renderizar: primeiro nome, acento, emoji, vazio, repetido e marcador desconhecido', () => {
   const r = (m, nome, numero = 7) => s.notificacoes.renderizar(m, { nome, numero });
-  assert.equal(r('Olá, {nome}!', '  Álvaro Souza '), 'Olá, Álvaro!');
-  assert.equal(r('{nome}', '😀 Zé'), '😀');
+  assert.equal(r('Olá, {nome}!', '  ÁLVARO souza '), 'Olá, *Álvaro*!');
+  assert.equal(r('{nome}', '😀 Zé'), '*😀*');
   assert.equal(r('{nome}', ''), 'cliente');
   assert.equal(r('{nome}', '   '), 'cliente');
   assert.equal(r('{nome}', null), 'cliente');
@@ -191,10 +191,10 @@ test('nome com $& e $1 é preservado literalmente', async () => {
   const p = emPreparo('Zé $& $1 Silva');
   s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
   await s.notificacoes.aguardarPendentes();
-  assert.match(app.mensageiro.enviadas[0].texto, /^Olá, Zé!/);
+  assert.match(app.mensageiro.enviadas[0].texto, /^Olá, \*Zé\*!/);
   const r = (nome) => s.notificacoes.renderizar('Olá, {nome}! nº {numero}', { nome, numero: 3 });
-  assert.equal(r('$& Silva'), 'Olá, $&! nº 3');
-  assert.equal(r('$1'), 'Olá, $1! nº 3');
+  assert.equal(r('$& Silva'), 'Olá, *$&*! nº 3');
+  assert.equal(r('$1'), 'Olá, *$1*! nº 3');
 });
 
 test('pedido sem cliente ou sem telefone: FALHOU visível, sem chamar o mensageiro (automático e reenviar)', async () => {
@@ -243,7 +243,7 @@ test('envio real com primeiro nome $& ou $1 preserva o texto exatamente', async 
     const p = emPreparo(nome);
     s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
     await s.notificacoes.aguardarPendentes();
-    assert.equal(app.mensageiro.enviadas[0].texto, `Olá, ${primeiro}!
+    assert.equal(app.mensageiro.enviadas[0].texto, `Olá, *${primeiro}*!
 
 Seu pedido nº ${p.id} está pronto para retirada.
 

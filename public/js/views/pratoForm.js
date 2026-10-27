@@ -43,7 +43,7 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
       <label>Nome<input name="nome" maxlength="60" required autocomplete="off" value="${esc(prato?.nome ?? '')}"></label>
       <label>Código curto<input name="codigo" maxlength="20" autocomplete="off" value="${esc(prato?.codigo ?? '')}"></label>
       <label>Categoria<select name="categoriaId" required>${prato ? '' : '<option value="">Selecione…</option>'}${opcoes}</select></label>
-      <label>Preço (R$)<input name="preco" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="${esc(centsParaReais(prato?.precoCents))}"></label>
+      <label>Preço (R$)<input name="preco" data-mask="dinheiro" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="${esc(centsParaReais(prato?.precoCents))}"></label>
       <label class="wide">Descrição<input name="descricao" maxlength="300" autocomplete="off" value="${esc(prato?.descricao ?? '')}"></label>
       <label class="check"><input type="checkbox" name="ativo" ${prato?.ativo ?? true ? 'checked' : ''}>Ativo</label>
       <div class="wide foto-box">

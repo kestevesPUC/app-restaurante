@@ -82,7 +82,7 @@ test('pedidos.csv neutraliza célula começando com = + - @', async () => {
   const linhas = res.body.trim().split('\r\n');
   assert.equal(linhas[0], 'Nº;Data;Hora;Cliente;Telefone;Itens;Total (R$);Tempo estimado (min);Status');
   assert.match(linhas[1], /^\d+;\d{2}\/\d{2}\/\d{4};\d{2}:\d{2};/);
-  assert.deepEqual(linhas.slice(1).map((l) => l.split(';')[3]), ["'=1+1", "'+SOMA(A1)", "'-2", "'@cmd", 'Normal']);
+  assert.deepEqual(linhas.slice(1).map((l) => l.split(';')[3]), ["'=1+1", "'+soma(A1)", "'-2", "'@cmd", 'Normal']);
   assert.equal(linhas[1].split(';')[6], '25,00');
   assert.equal(linhas[1].split(';')[4], "'+5511999998888");
   assert.equal(linhas[1].split(';')[7], '10');
@@ -265,4 +265,48 @@ test('corpos hostis → 400 em português, nunca 500', async () => {
   }
   assert.equal((await req('GET', `/api/pedidos/${p.id}`)).body.status, 'ABERTO');
   assert.equal(app.erros.length, 0);
+});
+
+test('senha: sequencial por dia, atribuída ao confirmar e mantida ao reabrir; reinicia no dia seguinte', async () => {
+  const a = pedido('A');
+  const b = pedido('B');
+  assert.equal(a.senha, null);
+  assert.equal(s.pedidos.confirmar(B, b.id).senha, 1);
+  assert.equal(s.pedidos.confirmar(B, a.id).senha, 2);
+  s.pedidos.reabrir(B, b.id);
+  assert.equal(s.pedidos.confirmar(B, b.id).senha, 1);
+  app.relogio.advance(DIA);
+  assert.equal(s.pedidos.confirmar(B, pedido('C').id).senha, 1);
+});
+
+test('aviso que falhou por WhatsApp desconectado é reenviado por reenviarPendentes (chamado ao conectar)', async () => {
+  await app.close();
+  const MensageiroError = require('../src/domain/errors/MensageiroError');
+  let conectado = false;
+  const enviadas = [];
+  const mensageiro = {
+    estado: () => (conectado ? 'CONECTADO' : 'DESCONECTADO'),
+    async enviar(m) { if (!conectado) throw new MensageiroError('NAO_CONECTADO'); enviadas.push(m); },
+  };
+  app = await createTestApp({ mensageiro });
+  s = app.app.services;
+  const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
+  B = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ATEND');
+  const cat = s.categorias.create(A, { nome: 'Lanches' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const prato = s.pratos.create(A, { nome: 'X', categoriaId: cat.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
+  const p = s.pedidos.criarRascunho(B, { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [{ tipo: 'PRATO', itemId: prato.id, quantidade: 1 }] });
+  s.pedidos.confirmar(B, p.id);
+  s.pedidos.mudarStatus(A, p.id, 'EM_PREPARO');
+  s.pedidos.mudarStatus(A, p.id, 'PRONTO_RETIRADA');
+  await s.notificacoes.aguardarPendentes();
+  assert.deepEqual(s.notificacoes.historico(A, p.id).map((n) => n.situacao), ['FALHOU']);
+  conectado = true;
+  s.notificacoes.reenviarPendentes();
+  await s.notificacoes.aguardarPendentes();
+  assert.deepEqual(s.notificacoes.historico(A, p.id).map((n) => n.situacao), ['ENVIADA', 'FALHOU']);
+  assert.equal(enviadas.length, 1);
+  s.notificacoes.reenviarPendentes();
+  await s.notificacoes.aguardarPendentes();
+  assert.equal(enviadas.length, 1, 'não reenvia de novo depois de avisado');
 });

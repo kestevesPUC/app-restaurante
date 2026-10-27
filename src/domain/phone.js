@@ -22,4 +22,10 @@ function normalizarTelefone(texto) {
   return `+55${ddd}${numero}`;
 }
 
-module.exports = { normalizarTelefone };
+/** Telefone para exibir: "+5531993512666" → "(31) 99351-2666". Valor que não for brasileiro de 10/11 dígitos volta como veio. */
+function mascararTelefone(valor) {
+  const m = /^\+?55(\d{2})(\d{4,5})(\d{4})$/.exec(String(valor ?? '').replace(/\D/g, '').replace(/^/, '+'));
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : String(valor ?? '');
+}
+
+module.exports = { normalizarTelefone, mascararTelefone };

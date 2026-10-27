@@ -3,14 +3,14 @@ const { normalizarNome } = require('../../domain/cardapio/validators');
 
 const COLUNAS_PEDIDO = `p.id, p.data_local, p.tipo, p.status, p.cliente_id, p.cliente_nome, p.cliente_telefone, p.tempo_estimado_min,
   p.confirmado_em, p.subtotal_cents, p.desconto_cents, p.total_cents, p.observacao, p.criado_por, p.criado_em,
-  p.cancelado_em, p.cancelado_por, p.motivo_cancelamento`;
+  p.cancelado_em, p.cancelado_por, p.motivo_cancelamento, p.senha`;
 
 /** Colunas de `pedidos` que o serviço pode alterar (camelCase → snake_case). */
 const ATUALIZAVEIS = {
   status: 'status', clienteId: 'cliente_id', clienteNome: 'cliente_nome', clienteTelefone: 'cliente_telefone',
   tempoEstimadoMin: 'tempo_estimado_min', confirmadoEm: 'confirmado_em', observacao: 'observacao',
   subtotalCents: 'subtotal_cents', descontoCents: 'desconto_cents', totalCents: 'total_cents',
-  canceladoEm: 'cancelado_em', canceladoPor: 'cancelado_por', motivoCancelamento: 'motivo_cancelamento',
+  canceladoEm: 'cancelado_em', canceladoPor: 'cancelado_por', motivoCancelamento: 'motivo_cancelamento', senha: 'senha',
 };
 
 const escaparLike = (texto) => texto.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -31,8 +31,13 @@ class PedidoRepository {
       clienteTelefone: row.cliente_telefone, tempoEstimadoMin: row.tempo_estimado_min, confirmadoEm: row.confirmado_em,
       subtotalCents: row.subtotal_cents, descontoCents: row.desconto_cents, totalCents: row.total_cents, observacao: row.observacao,
       criadoPor: row.criado_por, criadoEm: row.criado_em, canceladoEm: row.cancelado_em, canceladoPor: row.cancelado_por,
-      motivoCancelamento: row.motivo_cancelamento,
+      motivoCancelamento: row.motivo_cancelamento, senha: row.senha,
     };
+  }
+
+  /** Próxima senha do dia (1, 2, 3…). */
+  proximaSenha(dataLocal) {
+    return this.db.prepare('SELECT COALESCE(MAX(senha), 0) + 1 AS n FROM pedidos WHERE data_local = ?').get(dataLocal).n;
   }
 
   findById(id) {
