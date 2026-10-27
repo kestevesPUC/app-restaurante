@@ -219,3 +219,11 @@ label.check{display:flex;gap:8px;align-items:center;margin:6px 0}
 .credito{color:inherit;opacity:.75;font-size:12px;text-decoration:none;padding:4px 10px}
 .credito:hover,.credito:focus-visible{opacity:1;text-decoration:underline}
 dl.detail .credito{opacity:1;font-size:inherit;padding:0;color:var(--brand)}
+
+/* Finalizar pedido: forma de pagamento e QR Code PIX */
+.pagamento { border: 0; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.pagamento legend { font-weight: 600; margin-bottom: 6px; }
+.pix-qr { width: 220px; max-width: 100%; margin: 8px auto; background: #fff; border-radius: 8px; }
+.pix-qr svg { display: block; width: 100%; height: auto; }
+.pix-info { text-align: center; margin: 4px 0 8px; }
+#fp-copia { width: 100%; font-family: monospace; font-size: 12px; word-break: break-all; }

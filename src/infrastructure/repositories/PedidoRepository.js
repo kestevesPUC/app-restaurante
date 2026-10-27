@@ -3,7 +3,7 @@ const { normalizarNome } = require('../../domain/cardapio/validators');
 
 const COLUNAS_PEDIDO = `p.id, p.data_local, p.tipo, p.status, p.cliente_id, p.cliente_nome, p.cliente_telefone, p.tempo_estimado_min,
   p.confirmado_em, p.subtotal_cents, p.desconto_cents, p.total_cents, p.observacao, p.criado_por, p.criado_em,
-  p.cancelado_em, p.cancelado_por, p.motivo_cancelamento, p.senha`;
+  p.cancelado_em, p.cancelado_por, p.motivo_cancelamento, p.senha, p.forma_pagamento`;
 
 /** Colunas de `pedidos` que o serviço pode alterar (camelCase → snake_case). */
 const ATUALIZAVEIS = {
@@ -11,6 +11,7 @@ const ATUALIZAVEIS = {
   tempoEstimadoMin: 'tempo_estimado_min', confirmadoEm: 'confirmado_em', observacao: 'observacao',
   subtotalCents: 'subtotal_cents', descontoCents: 'desconto_cents', totalCents: 'total_cents',
   canceladoEm: 'cancelado_em', canceladoPor: 'cancelado_por', motivoCancelamento: 'motivo_cancelamento', senha: 'senha',
+  formaPagamento: 'forma_pagamento',
 };
 
 const escaparLike = (texto) => texto.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -31,7 +32,7 @@ class PedidoRepository {
       clienteTelefone: row.cliente_telefone, tempoEstimadoMin: row.tempo_estimado_min, confirmadoEm: row.confirmado_em,
       subtotalCents: row.subtotal_cents, descontoCents: row.desconto_cents, totalCents: row.total_cents, observacao: row.observacao,
       criadoPor: row.criado_por, criadoEm: row.criado_em, canceladoEm: row.cancelado_em, canceladoPor: row.cancelado_por,
-      motivoCancelamento: row.motivo_cancelamento, senha: row.senha,
+      motivoCancelamento: row.motivo_cancelamento, senha: row.senha, formaPagamento: row.forma_pagamento,
     };
   }
 

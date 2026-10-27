@@ -2,6 +2,8 @@ import { api } from '../api.js';
 import { brl, esc } from '../format.js';
 import { view, notify, fail, confirmDialog } from '../ui.js';
 import { reenviarAviso } from './reenviarAviso.js';
+import { finalizarPedido } from '../components/finalizarPedido.js';
+import { icon } from '../icons.js';
 
 const ROTULOS = {
   ABERTO: 'Rascunho', RECEBIDO: 'Recebido', EM_PREPARO: 'Em preparo', PRONTO_RETIRADA: 'Pronto (retirada)',
@@ -27,7 +29,7 @@ export async function viewPedidos() {
     const b = [];
     if (p.status === 'ABERTO') b.push(['confirmar', 'Confirmar']);
     if (p.status === 'PRONTO_RETIRADA' || p.status === 'PRONTO_ENTREGA') b.push(['finalizar', 'Finalizar']);
-    if (p.status.startsWith('PRONTO')) b.push(['reenviar', 'Reenviar WhatsApp']);
+    if (p.status.startsWith('PRONTO')) b.push(['reenviar', `${icon('whatsapp')} Reenviar WhatsApp`]);
     if (!['FINALIZADO', 'CANCELADO'].includes(p.status)) b.push(['cancelar', 'Cancelar', true]);
     return b.map(([a, rotulo, perigo]) => `<button type="button" class="btn alt sm${perigo ? ' danger-text' : ''}" data-a="${a}" data-id="${p.id}">${rotulo}</button>`).join(' ');
   };
@@ -45,7 +47,7 @@ export async function viewPedidos() {
     const id = Number(b.dataset.id);
     try {
       if (b.dataset.a === 'confirmar') await api.post(`/api/pedidos/${id}/confirmar`);
-      if (b.dataset.a === 'finalizar') await api.post(`/api/pedidos/${id}/status`, { status: 'FINALIZADO' });
+      if (b.dataset.a === 'finalizar') { await finalizarPedido(id, () => { notify('Pedido finalizado'); recarregar(); }); return; }
       if (b.dataset.a === 'reenviar') { await reenviarAviso(b); return; }
       if (b.dataset.a === 'cancelar') {
         if (!await confirmDialog({ title: 'Cancelar pedido', message: `Cancelar o pedido nº ${id}?`, confirmLabel: 'Cancelar pedido', danger: true })) return;

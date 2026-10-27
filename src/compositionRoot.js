@@ -14,6 +14,7 @@ const PedidoRepository = require('./infrastructure/repositories/PedidoRepository
 const BebidaRepository = require('./infrastructure/repositories/BebidaRepository');
 const MovimentacaoRepository = require('./infrastructure/repositories/MovimentacaoRepository');
 const ClienteRepository = require('./infrastructure/repositories/ClienteRepository');
+const ChavePixRepository = require('./infrastructure/repositories/ChavePixRepository');
 const PasswordHasher = require('./infrastructure/security/PasswordHasher');
 const SessionStore = require('./infrastructure/security/SessionStore');
 const LoginThrottle = require('./infrastructure/security/LoginThrottle');
@@ -47,6 +48,8 @@ const WhatsAppWebMensageiro = require('./infrastructure/whatsapp/WhatsAppWebMens
 const criarClienteWhatsApp = require('./infrastructure/whatsapp/criarClienteWhatsApp');
 const NotificacaoController = require('./presentation/http/controllers/NotificacaoController');
 const PedidoService = require('./application/PedidoService');
+const PixService = require('./application/PixService');
+const PixController = require('./presentation/http/controllers/PixController');
 const MontadorDeItens = require('./application/MontadorDeItens');
 const ConsultaDePedidos = require('./application/ConsultaDePedidos');
 const FotoValidator = require('./domain/validation/FotoValidator');
@@ -103,6 +106,7 @@ function buildApplication({
     clientes: new ClienteRepository(db),
     relatorios: new RelatorioRepository(db),
     notificacoes: new NotificacaoRepository(db),
+    chavesPix: new ChavePixRepository(db),
   };
   const hasher = new PasswordHasher();
   const sessions = new SessionStore({ ttlPorNivel: { A: 12 * HORA, B: 12 * HORA, C: null }, now: relogio });
@@ -160,6 +164,9 @@ function buildApplication({
       pratos: repositories.pratos, categorias: repositories.categorias, ingredientes: repositories.ingredientes, bebidas: repositories.bebidas,
     }),
   });
+  services.pix = new PixService({
+    repository: repositories.chavesPix, db, audit, clock, obterPedido: (user, id) => services.pedidos.obter(user, id),
+  });
 
   const router = new Router();
   new AuthController(services.auth).register(router);
@@ -173,6 +180,7 @@ function buildApplication({
   new NotificacaoController(services.notificacoes, services.config).register(router);
   new WhatsAppController(mensageiro, services.config, { erro: erroWhatsApp, logger }).register(router);
   new ClienteController(services.clientes).register(router);
+  new PixController(services.pix).register(router);
   new RelatorioController(services.relatorios, { xlsx: new ExcelExportador({ agora: () => new Date(relogio()) }), pdf: new PdfExportador({ agora: () => new Date(relogio()) }) }, relogio).register(router);
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);

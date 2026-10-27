@@ -105,6 +105,7 @@ class ConsultaDePedidos {
       canceladoEm: l.canceladoEm,
       canceladoPor: l.canceladoPor,
       motivoCancelamento: l.motivoCancelamento,
+      formaPagamento: l.formaPagamento ?? null,
       historico,
     };
   }
