@@ -2,7 +2,7 @@
 
 Sistema desktop (Windows) de gestão de pedidos para restaurante/lanchonete: cardápio, estoque de bebidas, pedidos com cliente, tela da cozinha e aviso automático por WhatsApp quando o pedido fica pronto. Uso exclusivo da equipe (Administrador, Atendente e Cozinha).
 
-> **Status:** em desenvolvimento na branch `feat/escopo-lanchonete`. O back-end do escopo de lanchonete está implementado e testado; as telas estão sendo entregues por etapas (já existem login, usuários, auditoria, categorias, ingredientes, pratos e cardápio). Novo pedido, Pedidos, Cozinha (tablet), Clientes, Relatórios e Configurações são as próximas telas.
+> **Status:** em desenvolvimento. Back-end do escopo de lanchonete implementado e testado; já existem as telas de login, usuários, auditoria, cadastros, cardápio, novo pedido, pedidos, cozinha, clientes, relatórios e WhatsApp. Faltam ajustes finais de Configurações e a documentação do esquema do banco.
 
 ## Funcionalidades
 
