@@ -236,7 +236,7 @@ erDiagram
 - `prato_ingredientes`: chave primária composta `(prato_id, ingrediente_id)`; `ON DELETE CASCADE` a partir de `pratos`;
   `ON DELETE RESTRICT` a partir de `ingredientes`.
 - `pratos.categoria_id` com `ON DELETE RESTRICT`.
-- `pratos.foto`: imagem PNG/JPEG/WebP até 300 KB (opcional); `pratos.foto_tipo` guarda o tipo MIME.
+- `pratos.foto`: imagem PNG/JPEG/WebP sem limite de tamanho (opcional); `pratos.foto_tipo` guarda o tipo MIME.
 
 ### `mesas`
 `situacao CHECK IN ('LIVRE','OCUPADA','RESERVADA')`.

@@ -68,7 +68,7 @@ class HttpServer {
         token,
         params: match.params,
         query: Object.fromEntries(url.searchParams),
-        body: ['GET', 'DELETE'].includes(req.method) ? {} : await readJsonBody(req),
+        body: ['GET', 'DELETE'].includes(req.method) ? {} : await readJsonBody(req, /^\/api\/pratos\/\d+\/foto$/.test(url.pathname) ? Infinity : undefined),
         setCookie: (value, maxAge) => {
           headers['Set-Cookie'] = `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`;
         },

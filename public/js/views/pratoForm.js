@@ -6,12 +6,10 @@ import { createIngredientePicker } from '../components/ingredientePicker.js';
 import { adicionarIngrediente, moverItem, ordenarPorOrdem, removerIngrediente, renumerar } from '../listaOrdenada.js';
 
 export const FOTO_TIPOS = ['image/png', 'image/jpeg', 'image/webp'];
-export const FOTO_MAX_BYTES = 300 * 1024;
 
 /** Valida a foto escolhida no cliente (o servidor valida de novo). Devolve a mensagem de erro ou ''. */
 export function validarFoto(file) {
   if (!FOTO_TIPOS.includes(file.type)) return 'A foto deve ser PNG, JPEG ou WebP';
-  if (file.size > FOTO_MAX_BYTES) return `A foto deve ter no máximo 300 KB (esta tem ${Math.ceil(file.size / 1024)} KB)`;
   return '';
 }
 
@@ -49,7 +47,7 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
       <div class="wide foto-box">
         <div class="foto-prev" id="fotoPrev" aria-live="polite"></div>
         <div class="foto-ctl">
-          <label>Foto (PNG, JPEG ou WebP, até 300 KB)<input type="file" id="fotoFile" accept="image/png,image/jpeg,image/webp"></label>
+          <label>Foto (PNG, JPEG ou WebP)<input type="file" id="fotoFile" accept="image/png,image/jpeg,image/webp"></label>
           <button type="button" class="btn alt sm" id="fotoRemover" hidden>Remover foto</button>
           <p class="field-err" id="fotoErr" role="alert"></p>
         </div>

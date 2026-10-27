@@ -29,7 +29,7 @@ Valores monetários em **centavos** (inteiros); datas `AAAA-MM-DD`; data/hora IS
 | PUT/DELETE | `/api/ingredientes/:id` | A | alterar / excluir (409 se em uso → desativar) |
 | GET/POST | `/api/pratos` | todos / A | listar / criar `{nome, codigo, categoriaId, descricao, precoCents, ingredientes:[{ingredienteId, removivel, quantidade}]}` |
 | PUT/DELETE | `/api/pratos/:id` | A | alterar / excluir (409 se já pedido → desativar) |
-| PUT/DELETE | `/api/pratos/:id/foto` | A | `{foto: "data:image/...;base64,..."}` até 300 KB / remover |
+| PUT/DELETE | `/api/pratos/:id/foto` | A | `{foto: "data:image/...;base64,..."}` sem limite de tamanho / remover |
 
 ## Pedidos
 

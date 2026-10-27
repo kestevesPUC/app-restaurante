@@ -1,7 +1,6 @@
 'use strict';
 const ValidationError = require('../errors/ValidationError');
 
-const MAX_BYTES = 300 * 1024;
 const DATA_URI = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
 
 // Assinaturas (magic bytes) para não aceitar arquivos que apenas declaram ser imagem.
@@ -11,7 +10,7 @@ const ASSINATURAS = {
   'image/webp': (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP',
 };
 
-/** Valida a foto de um prato enviada como data URI (PNG, JPEG ou WebP, até 300 KB decodificados). */
+/** Valida a foto de um prato enviada como data URI (PNG, JPEG ou WebP, sem limite de tamanho). */
 class FotoValidator {
   /** @returns {{tipo: string, dados: Buffer}} */
   parse(dataUri) {
@@ -20,7 +19,6 @@ class FotoValidator {
     const [, tipo, base64] = encontrado;
     const dados = Buffer.from(base64, 'base64');
     if (dados.length === 0) throw new ValidationError('Imagem vazia');
-    if (dados.length > MAX_BYTES) throw new ValidationError('A imagem é muito grande (máximo de 300 KB)');
     if (!ASSINATURAS[tipo](dados)) throw new ValidationError('O arquivo enviado não é uma imagem válida');
     return { tipo, dados };
   }

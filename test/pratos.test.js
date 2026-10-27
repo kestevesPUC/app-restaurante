@@ -93,15 +93,15 @@ test('GET /api/cardapio omite pratos e categorias inativos e traz adicionais', a
   assert.equal((await app.request('GET', '/api/cardapio', { user: 'COZ' })).status, 403);
 });
 
-test('foto > 300 KB → 400; assinatura inválida → 400; foto válida é gravada e servida', async () => {
+test('foto sem limite de tamanho; assinatura inválida → 400; foto válida é gravada e servida', async () => {
   const cat = await novaCategoria();
   const p = (await prato(cat.id)).body;
   const rota = `/api/pratos/${p.id}/foto`;
-  const grande = Buffer.concat([PNG, Buffer.alloc(300 * 1024, 2)]);
-  assert.equal((await put(rota, { foto: uri(grande) })).status, 400);
+  const grande = Buffer.concat([PNG, Buffer.alloc(3 * 1024 * 1024, 2)]);
   assert.equal((await put(rota, { foto: uri(Buffer.from('não sou imagem')) })).status, 400);
   assert.equal((await put(rota, { foto: 'texto' })).status, 400);
   assert.equal((await app.request('GET', rota, { user: 'ATEND' })).status, 404);
+  assert.equal((await put(rota, { foto: uri(grande) })).status, 200);
   const ok = await put(rota, { foto: uri(PNG) });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.temFoto, true);
