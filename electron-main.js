@@ -10,6 +10,7 @@ const { protegerNavegacao } = require('./src/desktop/protegerNavegacao');
 const { comLimite } = require('./src/desktop/comLimite');
 const { tituloDaJanela } = require('./src/desktop/titulo');
 const JsonLineLogger = require('./src/infrastructure/logging/JsonLineLogger');
+const { lerConfiguracaoSincronizacao, estadoEmArquivo } = require('./src/infrastructure/sync/configSincronizacao');
 const pacote = require('./package.json');
 const { detectarNavegador } = require('./src/infrastructure/whatsapp/detectarNavegador');
 
@@ -78,11 +79,15 @@ async function iniciar() {
   const atualizador = criarAtualizador();
   // Sessão do WhatsApp em userData: fora do banco e do backup. O Edge instalado é o navegador (nada é baixado).
   const whatsapp = { habilitado: true, dataPath: path.join(app.getPath('userData'), 'whatsapp-session'), navegador: null };
-  application = buildApplication({ dbPath, whatsapp, logger });
+  // Cópia para a nuvem (opcional): precisa de SUPABASE_URL e SUPABASE_SECRET_KEY em um .env na pasta de dados do app.
+  const nuvem = lerConfiguracaoSincronizacao({ pastas: [app.getPath('userData'), __dirname] });
+  const sincronizacao = nuvem && { ...nuvem, ...estadoEmArquivo(path.join(app.getPath('userData'), 'sync-postgres-estado.json')) };
+  application = buildApplication({ dbPath, whatsapp, logger, sincronizacao });
   whatsapp.navegador = detectarNavegador({ configurado: application.services.config.get('whatsapp.navegador') });
   const inicial = application.services.adminBootstrap.run();
   const { port } = await application.server.listen(0, '127.0.0.1');
   const url = `http://127.0.0.1:${port}`;
+  application.services.sincronizacao.iniciar();
 
   if (inicial) {
     await dialog.showMessageBox({
