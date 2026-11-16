@@ -7,6 +7,7 @@ import { montarTitulo } from './titulo.js';
 import { notify, fail } from './ui.js';
 import { ROTAS, menuPara, nivelNome, podeAcessar, rotaInicial } from './niveis.js';
 import { conectar } from './events.js';
+import { somNovoPedido } from './som.js';
 import { initPasswordToggles } from './components/passwordToggle.js';
 import { initMasks } from './mask.js';
 import { renderLogin, renderTrocaSenha } from './views/login.js';
@@ -137,6 +138,8 @@ window.addEventListener('hashchange', mostrar);
 
 // Aviso ao cliente que não saiu (ex.: WhatsApp desconectado): mostra ao atendente, que pode reenviar.
 window.addEventListener('pdv:evento', ({ detail }) => {
+  // Novo pedido: confirmado (RECEBIDO) e a caminho da cozinha.
+  if (detail.tipo === 'pedido' && detail.dados?.status === 'RECEBIDO') somNovoPedido();
   if (detail.tipo === 'notificacao' && detail.dados?.situacao === 'FALHOU') {
     notify(`Não foi possível avisar o cliente do pedido ${detail.dados.pedidoId}: ${detail.dados.erro}. Use "Reenviar WhatsApp".`, 'err');
   }
