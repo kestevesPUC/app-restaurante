@@ -24,7 +24,12 @@ jobs:
         shell: bash
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
       - run: npm test
-      - name: Compilar e publicar
-        run: npx electron-builder --config electron-builder.config.js --win --publish always
+      - name: Compilar instalador
+        run: npx electron-builder --config electron-builder.config.js --win --publish never
+      - name: Criar release e anexar arquivos
+        shell: bash
+        run: |
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "${GITHUB_REF_NAME#v}" --generate-notes dist/PDV-Restaurante-Setup-*.exe dist/PDV-Restaurante-Setup-*.exe.blockmap dist/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
