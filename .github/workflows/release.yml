@@ -1,0 +1,30 @@
+name: Publicar instalador
+
+# Publicar uma versão: npm run versao:patch (ou :minor), commit, e depois
+#   git tag vX.Y.Z && git push origin vX.Y.Z
+# O GitHub compila o instalador do Windows e cria a release; os apps instalados se atualizam sozinhos.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Versão do pacote = nome da tag
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+      - run: npm test
+      - name: Compilar e publicar
+        run: npx electron-builder --config electron-builder.config.js --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,7 +10,9 @@
     "test": "node --test --test-timeout=30000 --test-reporter=spec test/*.test.js",
     "dist": "electron-builder --config electron-builder.config.js --win --publish never",
     "sync:postgres": "node scripts/sync-postgres.js",
-    "sync:ddl": "node scripts/sync-postgres.js --ddl"
+    "sync:ddl": "node scripts/sync-postgres.js --ddl",
+    "versao:patch": "npm version patch --no-git-tag-version",
+    "versao:minor": "npm version minor --no-git-tag-version"
   },
   "engines": {
     "node": ">=22.13"
