@@ -69,6 +69,12 @@ const AuthController =require('./presentation/http/controllers/AuthController');
 const UsuarioController = require('./presentation/http/controllers/UsuarioController');
 const AuditController = require('./presentation/http/controllers/AuditController');
 const EventController = require('./presentation/http/controllers/EventController');
+const SincronizacaoController = require('./presentation/http/controllers/SincronizacaoController');
+const SincronizacaoNuvem = require('./application/SincronizacaoNuvem');
+const SqlitePostgresSync = require('./infrastructure/sync/SqlitePostgresSync');
+
+// Tabelas de pedidos que a cópia também TRAZ da nuvem (outro aparelho pode criar/alterar pedidos).
+const TABELAS_PUXADAS = ['clientes', 'pedidos', 'pedido_envios', 'pedido_itens', 'item_modificacoes', 'pedido_status_historico'];
 
 const HORA = 60 * 60 * 1000;
 
@@ -83,10 +89,12 @@ const HORA = 60 * 60 * 1000;
  * @param {import('./application/ports/Mensageiro').Mensageiro} [options.mensageiro] padrão: MensageiroSimulado
  * @param {number} [options.notificacaoTimeoutMs] limite de cada envio de WhatsApp
  * @param {{habilitado?: boolean, dataPath?: string, navegador?: string|null}} [options.whatsapp] `habilitado` troca o simulado pelo real
+ * @param {{url?: string, chave?: string, destino?: object, intervaloMs?: number, salvarEstado?: Function, estado?: object}|null} [options.sincronizacao]
+ *   cópia para a nuvem (Supabase por HTTPS); `destino` permite injetar outro destino. Sem isto a cópia fica desligada.
  */
 function buildApplication({
   dbPath = ':memory:', relogio = Date.now, publicDir = path.join(__dirname, '..', 'public'), logger = console, heartbeatMs,
-  mensageiro: mensageiroInjetado, notificacaoTimeoutMs, whatsapp = {},
+  mensageiro: mensageiroInjetado, notificacaoTimeoutMs, whatsapp = {}, sincronizacao = null,
   sistema = { nome: pacote.productName || 'PDV Restaurante', versao: pacote.version },
 } = {}) {
   const clock = () => new Date(relogio());
@@ -168,6 +176,22 @@ function buildApplication({
     repository: repositories.chavesPix, db, audit, clock, obterPedido: (user, id) => services.pedidos.obter(user, id),
   });
 
+  // Cópia do banco para a nuvem: só liga quando há configuração; a rotina automática começa em `services.sincronizacao.iniciar()`.
+  const destinoNuvem = sincronizacao && (sincronizacao.destino
+    || (sincronizacao.url && sincronizacao.chave ? new SqlitePostgresSync.RestDestino({ url: sincronizacao.url, chave: sincronizacao.chave }) : null));
+  // Pedido vindo da nuvem com senha já usada hoje (ex.: criado em outro aparelho): ganha a próxima senha livre e a versão corrigida volta para a nuvem.
+  const ajustarImportacao = (t, linha, erro) => {
+    if (t.nome !== 'pedidos' || !/pedidos.data_local, pedidos.senha/.test(erro.message)) return null;
+    const { n } = db.prepare('SELECT COALESCE(MAX(senha), 0) + 1 AS n FROM pedidos WHERE data_local = ?').get(linha.data_local);
+    return { linha: { ...linha, senha: n }, aviso: `Pedido ${linha.id} da nuvem recebeu a senha ${n} (a ${linha.senha} já estava em uso hoje)` };
+  };
+  services.sincronizacao = new SincronizacaoNuvem({
+    sync: destinoNuvem ? new SqlitePostgresSync({ sqlite: db, destino: destinoNuvem, estado: sincronizacao.estado || {}, puxar: sincronizacao.puxar === false ? [] : TABELAS_PUXADAS, ajustarImportacao }) : null,
+    intervaloMs: sincronizacao?.intervaloMs, salvarEstado: sincronizacao?.salvarEstado, relogio, logger,
+    // Chegou pedido/alteração da nuvem: avisa as telas abertas (Andon, Pedidos) para recarregar.
+    aoImportar: () => { bus.publish('pedido', { origem: 'sincronizacao' }); bus.publish('cozinha', { origem: 'sincronizacao' }); },
+  });
+
   const router = new Router();
   new AuthController(services.auth).register(router);
   new UsuarioController(services.usuarios).register(router);
@@ -185,6 +209,7 @@ function buildApplication({
   new BebidaController(services.bebidas, services.estoque).register(router);
   new EstoqueController(services.estoque).register(router);
   new SistemaController(sistema).register(router);
+  new SincronizacaoController(services.sincronizacao).register(router);
   new AuditController(repositories.auditoria).register(router);
   new EventController(bus, { heartbeatMs }).register(router);
 
@@ -193,6 +218,7 @@ function buildApplication({
   return {
     server, services, repositories, bus, db, mensageiro,
     async close() {
+      services.sincronizacao.parar();
       await server.close();
       await Promise.race([services.notificacoes.aguardarPendentes(), new Promise((r) => setTimeout(r, 2000).unref())]);
       db.close();

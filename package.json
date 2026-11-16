@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "desktop": "electron .",
     "test": "node --test --test-timeout=30000 --test-reporter=spec test/*.test.js",
-    "dist": "electron-builder --config electron-builder.config.js --win --publish never"
+    "dist": "electron-builder --config electron-builder.config.js --win --publish never",
+    "sync:postgres": "node scripts/sync-postgres.js",
+    "sync:ddl": "node scripts/sync-postgres.js --ddl"
   },
   "engines": {
     "node": ">=22.13"
@@ -16,6 +18,7 @@
   "devDependencies": {
     "electron": "^44.9.0",
     "electron-builder": "^26.15.3",
+    "pg": "^8.23.1",
     "qrcode-generator": "^2.0.4"
   },
   "dependencies": {

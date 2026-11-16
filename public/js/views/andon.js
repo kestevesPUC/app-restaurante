@@ -14,6 +14,22 @@ const COLUNAS = [
 const minutos = (iso) => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)) : 0);
 
 let ouvinte = null; // um único ouvinte de eventos, mesmo com recarregamentos da tela
+let relogioSync = null; // atualiza o texto "Sincronizado às..." enquanto a tela está aberta
+
+const hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR');
+function textoSync(st) {
+  if (st.sincronizando) return 'Sincronizando…';
+  if (st.ultimoErro) return `Falha ao sincronizar: ${st.ultimoErro}`;
+  const base = st.ultimaEm ? `Sincronizado às ${hora(st.ultimaEm)}` : 'Aguardando a primeira sincronização';
+  if (st.falhasImportacao?.length) return `${base} · Não importado da nuvem: ${st.falhasImportacao[0]}`;
+  return st.avisosImportacao?.length ? `${base} · ${st.avisosImportacao.at(-1)}` : base;
+}
+/** Barra com o botão "Sincronizar" (só aparece se a cópia para a nuvem estiver configurada). */
+function barraSync(st) {
+  if (!st?.configurado) return '';
+  return `<div class="grid-toolbar" id="sync-bar"><button type="button" class="btn alt sm" id="sync-btn"${st.sincronizando ? ' disabled' : ''}>Sincronizar</button>
+    <small class="mute" id="sync-estado">${esc(textoSync(st))}</small></div>`;
+}
 
 /** Botões do cartão conforme o status e o nível (B acompanha, mas só A e C mexem na cozinha). */
 function botoes(p, nivel) {
@@ -36,7 +52,7 @@ function cartao(p, nivel) {
 
 /** Andon da cozinha: pedidos confirmados por etapa; ao marcar "Pronto" o sistema avisa o cliente pelo WhatsApp. */
 export async function viewAndon() {
-  const pedidos = await api.get('/api/cozinha');
+  const [pedidos, sync] = await Promise.all([api.get('/api/cozinha'), api.get('/api/sincronizacao').catch(() => null)]);
   const nivel = state.me.nivel;
   const recarregar = () => viewAndon().catch(fail);
   if (ouvinte) window.removeEventListener('pdv:evento', ouvinte);
@@ -46,12 +62,31 @@ export async function viewAndon() {
   };
   window.addEventListener('pdv:evento', ouvinte);
 
-  view().innerHTML = `<div class="andon" id="andon-tela">${COLUNAS.map((c) => {
+  view().innerHTML = `${barraSync(sync)}<div class="andon" id="andon-tela">${COLUNAS.map((c) => {
     const lista = pedidos.filter((p) => c.status.includes(p.status));
     return `<section class="card"><h2>${c.titulo} (${lista.length})</h2>${lista.map((p) => cartao(p, nivel)).join('') || '<p class="coming">Nenhum pedido.</p>'}</section>`;
   }).join('')}</div>`;
 
+  // Mantém o texto da barra em dia (a cópia automática roda sozinha a cada poucos segundos).
+  clearInterval(relogioSync);
+  if (sync?.configurado) {
+    relogioSync = setInterval(async () => {
+      const alvo = document.getElementById('sync-estado');
+      if (!alvo) { clearInterval(relogioSync); return; }
+      const st = await api.get('/api/sincronizacao').catch(() => null);
+      if (st) alvo.textContent = textoSync(st);
+    }, 3000);
+  }
+
   view().onclick = async (e) => {
+    const sb = e.target.closest('#sync-btn');
+    if (sb) { // sincroniza agora; o servidor reinicia a contagem do intervalo automático
+      sb.disabled = true;
+      sb.textContent = 'Sincronizando…';
+      try { await api.post('/api/sincronizacao/agora'); notify('Sincronizado com a nuvem'); } catch (error) { fail(error); }
+      await recarregar();
+      return;
+    }
     const re = e.target.closest('[data-reenviar]');
     if (re) { await reenviarAviso(re); return; }
     const b = e.target.closest('[data-status]');

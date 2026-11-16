@@ -37,6 +37,27 @@ Variáveis opcionais: `PORT` (padrão 3000), `PDV_DB` (caminho do SQLite, padrã
 
 O WhatsApp usa o Edge instalado no Windows (o Chromium do Puppeteer não é baixado). Na primeira conexão é preciso ler o QR Code com o celular do estabelecimento.
 
+## Cópia para o Supabase/Postgres na nuvem (opcional)
+
+Uma rotina separada lê o SQLite a cada poucos segundos e envia à nuvem só o que foi criado, alterado ou apagado. O app não muda.
+
+**Modo HTTPS (recomendado — funciona em redes que bloqueiam a porta do Postgres).** No `.env`:
+```
+SUPABASE_URL=https://SEU-PROJETO.supabase.co
+SUPABASE_SECRET_KEY=...   # Project Settings → API Keys → secret. Nunca publique.
+PDV_DB=C:/Users/SEU-USUARIO/AppData/Roaming/pdv-restaurante/pdv.sqlite
+```
+1. Rode `npm run sync:ddl` e cole o SQL no SQL Editor do Supabase (cria as tabelas, trancadas por RLS). Repita se o app ganhar colunas novas.
+2. Com o app aberto, rode `npm run sync:postgres` em outro terminal.
+
+**Modo Postgres direto:** use `DATABASE_URL=postgres://...` no lugar das duas chaves acima.
+
+`usuarios.senha_hash` e `pratos.foto` não são enviados. Opcionais: `SYNC_INTERVALO` (segundos, padrão 3), `PG_SSL=0`. O progresso fica em `sync-postgres-estado.json`, ao lado do banco; apague-o para reenviar tudo.
+
+**Dentro do app (desktop):** com as duas chaves no `.env` (na raiz do projeto em desenvolvimento, ou em `%APPDATA%pdv-restaurante.env` no app instalado), o próprio app faz a cópia a cada 5 s, sem precisar do terminal. Na tela **Andon da cozinha** aparece o botão **Sincronizar**, que copia na hora e reinicia essa contagem de 5 s. Não rode `npm run sync:postgres` ao mesmo tempo.
+
+**Nos dois sentidos.** Além de enviar, a rotina TRAZ da nuvem o que foi criado ou alterado por outro aparelho nas tabelas de pedidos (`clientes`, `pedidos`, `pedido_envios`, `pedido_itens`, `item_modificacoes`, `pedido_status_historico`) e grava no SQLite; o Andon e a lista de pedidos recarregam sozinhos. Se a mesma linha mudou dos dois lados, o SQLite local vence. Linhas que violam uma regra local (ex.: senha repetida no mesmo dia, cliente ou prato inexistente) não são importadas e o motivo aparece ao lado do botão Sincronizar. Cada aparelho deve criar pedidos só com numeração própria: dois aparelhos criando pedidos ao mesmo tempo podem repetir número de pedido e senha. `SYNC_PUXAR=0` desliga a importação.
+
 ## Estrutura
 
 ```
