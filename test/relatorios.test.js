@@ -222,3 +222,18 @@ test('GET /api/relatorios e /api/relatorios/:tipo: JSON, 400, 404 e 403', async 
   }
   assert.equal((await app.request('GET', '/api/relatorios/faturamento')).status, 401);
 });
+
+test('dashboard: ranking, pedidos e faturamento, com filtro de item', () => {
+  ir(2026, 10, 23, 12, 0);
+  finalizado([prato(2)]);
+  finalizado([prato(1)]);
+  confirmado([prato(5)]); // não finalizado: fora do dashboard
+  const r = s.relatorios.dashboard(A, { de: '2026-10-23', ate: '2026-10-23' });
+  assert.deepEqual(r.resumo, { pedidos: 2, faturamentoCents: 6000, ticketMedioCents: 3000, itensVendidos: 3 });
+  assert.equal(r.ranking[0].nome, 'X-Burger');
+  assert.equal(r.ranking[0].quantidade, 3);
+  assert.equal(r.porDia.length, 1);
+  const f = s.relatorios.dashboard(A, { de: '2026-10-23', ate: '2026-10-23', itens: ['PRATO:9999'] });
+  assert.equal(f.resumo.pedidos, 0);
+  assert.throws(() => s.relatorios.dashboard(B, {}), /permissão/);
+});

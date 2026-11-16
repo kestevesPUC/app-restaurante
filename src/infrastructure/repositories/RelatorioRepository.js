@@ -48,6 +48,24 @@ class RelatorioRepository {
       GROUP BY i.bebida_id`).all(inicio, fim);
   }
 
+  /** Itens não cancelados de pedidos finalizados no período, com a categoria do prato e o instante da finalização. */
+  itensFinalizados(inicio, fim) {
+    return this.db.prepare(`SELECT i.pedido_id, f.em AS finalizado_em, i.item_tipo, i.prato_id, i.bebida_id, i.item_nome, i.quantidade, i.total_cents,
+        pr.categoria_id, cat.nome AS categoria_nome
+      FROM pedido_itens i JOIN pedidos p ON p.id = i.pedido_id JOIN (${ULTIMA_FINALIZACAO}) f ON f.pedido_id = p.id
+      LEFT JOIN pratos pr ON pr.id = i.prato_id LEFT JOIN categorias cat ON cat.id = pr.categoria_id
+      WHERE i.cancelado_em IS NULL AND p.status = 'FINALIZADO' AND f.em >= ? AND f.em < ?`).all(inicio, fim);
+  }
+
+  /** Opções dos filtros do dashboard. */
+  catalogo() {
+    return {
+      categorias: this.db.prepare('SELECT id, nome FROM categorias ORDER BY nome').all(),
+      pratos: this.db.prepare('SELECT id, nome, categoria_id AS categoriaId FROM pratos ORDER BY nome').all(),
+      bebidas: this.db.prepare('SELECT id, nome FROM bebidas ORDER BY nome').all(),
+    };
+  }
+
   bebidas() {
     return this.db.prepare('SELECT id, nome, estoque_qtd, estoque_minimo, ativo FROM bebidas').all();
   }

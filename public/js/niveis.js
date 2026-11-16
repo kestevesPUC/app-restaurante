@@ -18,6 +18,7 @@ export const ROTAS = [
   { id: 'pratos', rotulo: 'Pratos', subtitulo: 'Cardápio: pratos, preços, fotos e ingredientes', icone: 'dish', grupo: 'Cardápio', niveis: ['A', 'B'] },
   { id: 'ingredientes', rotulo: 'Ingredientes', subtitulo: 'Ingredientes e preço de adicional', icone: 'leaf', grupo: 'Cardápio', niveis: ['A', 'B'] },
   { id: 'categorias', rotulo: 'Categorias', subtitulo: 'Seções do cardápio e destino da cozinha', icone: 'tag', grupo: 'Cardápio', niveis: ['A', 'B'] },
+  { id: 'dashboard', rotulo: 'Dashboard', subtitulo: 'O que mais vendeu, pedidos e faturamento', icone: 'filter', grupo: 'Gestão', niveis: ['A'] },
   { id: 'usuarios', rotulo: 'Usuários', subtitulo: 'Acesso ao sistema', icone: 'users', grupo: 'Gestão', niveis: ['A'] },
   { id: 'whatsapp', rotulo: 'WhatsApp', subtitulo: 'Conexão para avisar o cliente quando o pedido ficar pronto', icone: 'whatsapp', grupo: 'Gestão', niveis: ['A'] },
   { id: 'pix', rotulo: 'Chaves PIX', subtitulo: 'Chaves PIX para receber pagamentos; a padrão gera o QR Code', icone: 'pix', grupo: 'Gestão', niveis: ['A'] },

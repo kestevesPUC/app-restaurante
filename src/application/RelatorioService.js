@@ -40,6 +40,61 @@ class RelatorioService {
     return { titulo: def.titulo, periodo: periodo && { de: periodo.de, ate: periodo.ate }, colunas: def.colunas.map((c) => ({ ...c })), linhas, totais };
   }
 
+  /**
+   * Dashboard de vendas (pedidos FINALIZADOS). Filtros: período, `tipo` (PRATO|BEBIDA), `categoriaId` (pratos) e `itens` (lista "PRATO:id"/"BEBIDA:id").
+   * Sem filtro de item, faturamento = total dos pedidos; com filtro, = soma dos itens que passam no filtro.
+   */
+  dashboard(user, filtros = {}) {
+    exigirAdmin(user);
+    const p = resolverPeriodo(filtros, this.relogio());
+    const escolhidos = new Set(filtros.itens ?? []);
+    const passa = (i) => (!filtros.tipo || i.item_tipo === filtros.tipo)
+      && (!filtros.categoriaId || i.categoria_id === filtros.categoriaId)
+      && (escolhidos.size === 0 || escolhidos.has(`${i.item_tipo}:${i.prato_id ?? i.bebida_id}`));
+    const filtrado = Boolean(filtros.tipo || filtros.categoriaId || escolhidos.size);
+    const itens = this.repository.itensFinalizados(p.inicioIso, p.fimIso).filter(passa);
+
+    const ranking = new Map();
+    for (const i of itens) {
+      const id = i.prato_id ?? i.bebida_id;
+      const chave = `${i.item_tipo}:${id}`;
+      const r = ranking.get(chave) ?? { tipo: i.item_tipo, itemId: id, nome: i.item_nome, categoria: i.categoria_nome ?? null, quantidade: 0, totalCents: 0, pedidos: new Set() };
+      r.nome = i.item_nome; r.quantidade += i.quantidade; r.totalCents += i.total_cents; r.pedidos.add(i.pedido_id);
+      ranking.set(chave, r);
+    }
+    const linhas = [...ranking.values()].map(({ pedidos, ...r }) => ({ ...r, pedidos: pedidos.size }))
+      .sort((a, b) => b.quantidade - a.quantidade || b.totalCents - a.totalCents || porNome(a.nome, b.nome));
+
+    // Um "pedido" por id; o valor vem do total do pedido (sem filtro de item) ou da soma dos itens filtrados.
+    const doPedido = new Map();
+    if (filtrado) {
+      for (const i of itens) {
+        const x = doPedido.get(i.pedido_id) ?? { em: i.finalizado_em, cents: 0 };
+        x.cents += i.total_cents; doPedido.set(i.pedido_id, x);
+      }
+    } else {
+      for (const r of this.repository.pedidosFinalizados(p.inicioIso, p.fimIso)) doPedido.set(r.id, { em: r.finalizado_em, cents: r.total_cents });
+    }
+    const pedidos = [...doPedido.values()];
+    const faturamentoCents = soma(pedidos.map((x) => ({ c: x.cents })), 'c');
+    const porDia = [...agruparPorChave(pedidos, (x) => chaveLocal(x.em, 'dia')).entries()]
+      .map(([dia, g]) => ({ dia, pedidos: g.length, faturamentoCents: g.reduce((t, x) => t + x.cents, 0) }));
+    const porCategoria = new Map();
+    for (const l of linhas) {
+      const nome = l.tipo === 'BEBIDA' ? 'Bebidas' : (l.categoria ?? 'Sem categoria');
+      const c = porCategoria.get(nome) ?? { categoria: nome, quantidade: 0, totalCents: 0 };
+      c.quantidade += l.quantidade; c.totalCents += l.totalCents; porCategoria.set(nome, c);
+    }
+    return {
+      periodo: { de: p.de, ate: p.ate },
+      resumo: { pedidos: pedidos.length, faturamentoCents, ticketMedioCents: ticketMedio(faturamentoCents, pedidos.length), itensVendidos: soma(linhas, 'quantidade') },
+      ranking: linhas,
+      porDia,
+      porCategoria: [...porCategoria.values()].sort((a, b) => b.totalCents - a.totalCents),
+      catalogo: this.repository.catalogo(),
+    };
+  }
+
   #montar(tipo, p, { agrupar, limite }) {
     switch (tipo) {
       case 'pedidos-periodo': return this.#pedidosPeriodo(p);

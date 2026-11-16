@@ -18,6 +18,7 @@ class RelatorioController {
   }
 
   register(router) {
+    router.add('GET', '/api/dashboard-vendas', (ctx) => this.relatorios.dashboard(ctx.user, this.#filtrosDashboard(ctx.query)));
     router.add('GET', '/api/relatorios', (ctx) => this.relatorios.listar(ctx.user));
     router.add('GET', '/api/relatorios/:tipo', (ctx) => this.#gerar(ctx));
   }
@@ -34,6 +35,21 @@ class RelatorioController {
     return new FileResponse({
       filename: `relatorio-${ctx.params.tipo}-${dia}.${exportador.extensao}`, contentType: exportador.contentType, body: await exportador.exportar(relatorio),
     });
+  }
+
+  #filtrosDashboard(query = {}) {
+    const filtros = this.#filtros(query);
+    if (query.tipo !== undefined && query.tipo !== '') {
+      if (!['PRATO', 'BEBIDA'].includes(query.tipo)) throw new ValidationError('Tipo inválido: use PRATO ou BEBIDA');
+      filtros.tipo = query.tipo;
+    }
+    if (query.categoriaId) filtros.categoriaId = idPositivo(query.categoriaId, 'A categoria');
+    if (query.itens) {
+      const itens = String(query.itens).split(',');
+      if (!itens.every((i) => /^(PRATO|BEBIDA):\d+$/.test(i))) throw new ValidationError('Itens inválidos');
+      filtros.itens = itens;
+    }
+    return filtros;
   }
 
   #filtros(query = {}) {
