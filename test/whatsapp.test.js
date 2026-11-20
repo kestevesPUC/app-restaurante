@@ -241,3 +241,23 @@ test('função agendada que dispara depois de parar não cria cliente novo', asy
   assert.equal(clientes.length, 1);
   assert.equal(m.estado(), 'DESCONECTADO');
 });
+
+test('ambienteDoNavegador remove __COMPAT_LAYER (qualquer caixa) e mantém o resto', () => {
+  const { ambienteDoNavegador } = require('../src/infrastructure/whatsapp/criarClienteWhatsApp');
+  const env = { __COMPAT_LAYER: 'RunAsInvoker', __compat_layer: 'x', PATH: 'C:/bin', USERPROFILE: 'C:/u' };
+  assert.deepEqual(ambienteDoNavegador(env), { PATH: 'C:/bin', USERPROFILE: 'C:/u' });
+  assert.equal(env.__COMPAT_LAYER, 'RunAsInvoker'); // não altera o original
+});
+
+test('encerrarNavegadorOrfao mira o perfil da sessão no Windows e não faz nada fora dele', async () => {
+  const { encerrarNavegadorOrfao } = require('../src/infrastructure/whatsapp/criarClienteWhatsApp');
+  const chamadas = [];
+  const executar = (cmd, args, opcoes, cb) => { chamadas.push({ cmd, args }); cb(new Error('falhou')); };
+  await encerrarNavegadorOrfao("C:\\Dados\\o'brien\\session", { executar, plataforma: 'win32' });
+  assert.equal(chamadas.length, 1);
+  assert.equal(chamadas[0].cmd, 'powershell.exe');
+  assert.match(chamadas[0].args.at(-1), /o''brien\\session/);
+  await encerrarNavegadorOrfao('/tmp/session', { executar, plataforma: 'linux' });
+  await encerrarNavegadorOrfao('', { executar, plataforma: 'win32' });
+  assert.equal(chamadas.length, 1);
+});
