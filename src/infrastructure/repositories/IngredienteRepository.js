@@ -6,7 +6,6 @@ class IngredienteRepository extends CrudRepository {
   constructor(db) {
     super(db, 'ingredientes', [
       { prop: 'nome', col: 'nome' },
-      { prop: 'unidadeMedida', col: 'unidade_medida' },
       { prop: 'observacao', col: 'observacao' },
       { prop: 'precoAdicionalCents', col: 'preco_adicional_cents' },
       { prop: 'podeSerAdicional', col: 'pode_ser_adicional', bool: true },

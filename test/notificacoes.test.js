@@ -16,7 +16,7 @@ async function subir(overrides) {
   const u = (n) => app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get(n);
   A = u('ADM'); B = u('ATEND'); C = u('COZ');
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   burger = s.pratos.create(A, { nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
   eventos = [];
   app.bus.subscribe((e) => { if (e.tipo === 'notificacao') eventos.push(e.dados); });

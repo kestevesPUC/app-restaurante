@@ -12,7 +12,7 @@ beforeEach(async () => {
   const u = (nome) => app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get(nome);
   A = u('ADM'); B = u('ATEND'); C = u('COZ');
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   burger = s.pratos.create(A, { nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2000, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
 });
 afterEach(async () => { await app.close(); });

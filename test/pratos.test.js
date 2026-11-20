@@ -10,7 +10,7 @@ afterEach(async () => { await app.close(); });
 const post = (rota, body, user = 'ADM') => app.request('POST', rota, { user, body });
 const put = (rota, body, user = 'ADM') => app.request('PUT', rota, { user, body });
 const novaCategoria = async (nome = 'Lanches', extra = {}) => (await post('/api/categorias', { nome, ...extra })).body;
-const novoIngrediente = async (nome, extra = {}) => (await post('/api/ingredientes', { nome, unidadeMedida: 'UN', ...extra })).body;
+const novoIngrediente = async (nome, extra = {}) => (await post('/api/ingredientes', { nome, ...extra })).body;
 // Todo prato exige pelo menos um ingrediente: sem lista explícita, usa um ingrediente-base criado sob demanda.
 const prato = async (categoriaId, extra = {}) => {
   if (!extra.ingredientes && !baseId) baseId = (await novoIngrediente('Base')).id;

@@ -7,7 +7,7 @@ Sistema desktop (Windows) de gestão de pedidos para restaurante/lanchonete: car
 ## Funcionalidades
 
 - **Cardápio:** pratos (valor, tempo de preparo, ao menos um ingrediente, ativar/inativar) e bebidas.
-- **Ingredientes:** nome, unidade de medida e observação.
+- **Ingredientes:** nome e observação.
 - **Estoque de bebidas:** entrada, saída e ajuste com histórico, alerta de estoque baixo, bloqueio de venda sem saldo e baixa automática ao confirmar o pedido.
 - **Pedidos:** cliente (nome e telefone obrigatórios), itens com quantidade e observação, total e tempo estimado de preparo.
 - **Fluxo de status:** Recebido → Em preparo → Pronto para retirada/entrega → Finalizado (ou Cancelado), com histórico de data, hora e usuário.

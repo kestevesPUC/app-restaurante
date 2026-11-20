@@ -26,7 +26,7 @@ const ing = Object.fromEntries([
   ['cebola', 'Cebola', 100], ['maionese', 'Maionese', 0], ['batata', 'Batata frita', 0], ['frango', 'Frango', 0], ['arroz', 'Arroz', 0],
   ['feijao', 'Feijão', 0], ['bife', 'Bife', 0], ['ovo', 'Ovo', 250], ['pudim', 'Pudim', 0], ['mousse', 'Mousse de chocolate', 0],
 ].map(([k, nome, extra]) => [k, services.ingredientes.create(ator, {
-  nome, unidadeMedida: 'UN', precoAdicionalCents: extra, podeSerAdicional: extra > 0, ativo: true,
+  nome, precoAdicionalCents: extra, podeSerAdicional: extra > 0, ativo: true,
 }).id]));
 
 const prato = (nome, codigo, categoria, precoCents, tempoPreparoMin, descricao, itens) => services.pratos.create(ator, {

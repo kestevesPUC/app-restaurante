@@ -13,7 +13,7 @@ beforeEach(async () => {
   const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
   B = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ATEND');
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   const burger = s.pratos.create(A, { nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
   c = { burger };
 });
@@ -293,7 +293,7 @@ test('aviso que falhou por WhatsApp desconectado é reenviado por reenviarPenden
   const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
   B = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ATEND');
   const cat = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   const prato = s.pratos.create(A, { nome: 'X', categoriaId: cat.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
   const p = s.pedidos.criarRascunho(B, { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [{ tipo: 'PRATO', itemId: prato.id, quantidade: 1 }] });
   s.pedidos.confirmar(B, p.id);

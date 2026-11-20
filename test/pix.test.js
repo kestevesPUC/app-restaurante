@@ -53,7 +53,7 @@ test('cobrança PIX do pedido usa a chave padrão e o total; finalizar grava a f
   const s = app.app.services;
   const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
   const cat = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   const prato = s.pratos.create(A, { nome: 'X', categoriaId: cat.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
   const p = (await post('/api/pedidos', { cliente: { nome: 'Ana', telefone: '(11) 99999-8888' }, itens: [{ tipo: 'PRATO', itemId: prato.id, quantidade: 1 }] }, 'ATEND')).body;
 

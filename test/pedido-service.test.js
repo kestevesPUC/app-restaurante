@@ -22,8 +22,8 @@ const erroDe = (fn) => { try { fn(); } catch (e) { return e; } throw new Error('
 
 function cardapio({ estoque = 25 } = {}) {
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
-  const cebola = s.ingredientes.create(A, { nome: 'Cebola', unidadeMedida: 'UN' });
-  const bacon = s.ingredientes.create(A, { nome: 'Bacon', unidadeMedida: 'FATIA', podeSerAdicional: true, precoAdicionalCents: 400 });
+  const cebola = s.ingredientes.create(A, { nome: 'Cebola' });
+  const bacon = s.ingredientes.create(A, { nome: 'Bacon', podeSerAdicional: true, precoAdicionalCents: 400 });
   const burger = s.pratos.create(A, {
     nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: cebola.id, removivel: true, ordem: 0 }],
   });

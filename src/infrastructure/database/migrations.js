@@ -323,4 +323,11 @@ module.exports = [
       `);
     },
   },
+  {
+    version: 8,
+    // Ingredientes deixam de ter unidade de medida (o cadastro não pede mais esse dado).
+    up(db) {
+      db.exec('ALTER TABLE ingredientes DROP COLUMN unidade_medida;');
+    },
+  },
 ];

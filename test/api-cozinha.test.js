@@ -11,7 +11,7 @@ beforeEach(async () => {
   const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
   B = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ATEND');
   const lanches = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   burger = s.pratos.create(A, { nome: 'X-Burger', categoriaId: lanches.id, precoCents: 2500, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
 });
 afterEach(async () => { await app.close(); });
@@ -53,7 +53,7 @@ test('sem sessão → 401 em /api/cozinha', async () => {
 
 test('payload da cozinha: nº, cliente, itens com observação e personalização, tempo, confirmação e status; sem rascunho/finalizado/cancelado', async () => {
   const A = app.db.prepare('SELECT id, usuario, nivel FROM usuarios WHERE usuario = ?').get('ADM');
-  const queijo = s.ingredientes.create(A, { nome: 'Queijo', unidadeMedida: 'UN', podeSerAdicional: true, precoAdicionalCents: 300 });
+  const queijo = s.ingredientes.create(A, { nome: 'Queijo', podeSerAdicional: true, precoAdicionalCents: 300 });
   const p1 = s.pedidos.criarRascunho(B, {
     cliente: { nome: 'José Ávila', telefone: '(11) 99999-8888' }, observacao: 'tocar a campainha',
     itens: [{ tipo: 'PRATO', itemId: burger.id, quantidade: 2, observacao: 'sem cebola', adicionar: [{ ingredienteId: queijo.id, quantidade: 1 }] }],

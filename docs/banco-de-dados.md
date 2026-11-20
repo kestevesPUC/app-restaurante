@@ -329,6 +329,7 @@ Ao abrir o banco, as pendentes rodam automaticamente, cada uma em transação. N
 | 3 | Mesas, fila de espera, mensagens do WhatsApp |
 | 4 | Pedidos (balcão e mesa), rodadas (`pedido_envios`), itens, modificações |
 | 5 | Chaves PIX e pagamentos |
+| 8 | Ingredientes sem unidade de medida (`DROP COLUMN unidade_medida`) |
 
 ## Consulta de referência: lista de pedidos
 

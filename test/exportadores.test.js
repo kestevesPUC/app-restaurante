@@ -117,7 +117,7 @@ test('HTTP: pedidos reais finalizados → xlsx do faturamento com o total corret
   const A = app.db.prepare("SELECT id, usuario, nivel FROM usuarios WHERE usuario = 'ADM'").get();
   const B = app.db.prepare("SELECT id, usuario, nivel FROM usuarios WHERE usuario = 'ATEND'").get();
   const cat = s.categorias.create(A, { nome: 'Lanches' });
-  const pao = s.ingredientes.create(A, { nome: 'Pão', unidadeMedida: 'UN' });
+  const pao = s.ingredientes.create(A, { nome: 'Pão' });
   const burger = s.pratos.create(A, { nome: 'X-Burger', categoriaId: cat.id, precoCents: 2000, tempoPreparoMin: 10, ingredientes: [{ ingredienteId: pao.id }] });
   for (const q of [1, 2]) {
     const p = s.pedidos.criarRascunho(B, { cliente: { nome: 'Ana', telefone: '11999998888' }, itens: [{ tipo: 'PRATO', itemId: burger.id, quantidade: q }] });

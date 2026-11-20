@@ -11,9 +11,9 @@ const novoUsuario = (db, usuario, nivel = 'A') =>
     "INSERT INTO usuarios (usuario, nome, nivel, senha_hash, criado_em) VALUES (?, 'Nome', ?, 'x', '2026-10-23T00:00:00.000Z')"
   ).run(usuario, nivel);
 
-test('aplica as migrações e grava user_version = 7', () => {
+test('aplica as migrações e grava user_version = 8', () => {
   const db = new SqliteDatabase(':memory:');
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 7);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version, 8);
   const tabelas = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((t) => t.name);
   for (const t of ['usuarios', 'configuracoes', 'auditoria', 'categorias', 'ingredientes', 'pratos', 'prato_ingredientes', 'mesas', 'fila_espera', 'mensagens_whatsapp', 'pedidos', 'clientes', 'bebidas', 'movimentacoes_estoque', 'pedido_status_historico', 'notificacoes_whatsapp']) assert.ok(tabelas.includes(t), t);
   db.close();
@@ -98,12 +98,11 @@ test('pedido_status_historico exige pedido existente e permite UPDATE/DELETE (se
   db.close();
 });
 
-test('ingredientes exigem unidade_medida válida; pratos exigem tempo_preparo_min > 0', () => {
+test('ingredientes não têm unidade_medida; pratos exigem tempo_preparo_min > 0', () => {
   const db = new SqliteDatabase(':memory:');
-  const ing = (unidade) => db.prepare('INSERT INTO ingredientes (nome, nome_norm, unidade_medida) VALUES (?, ?, ?)').run('Pão', 'pao', unidade);
-  assert.throws(() => ing('XX'), /CHECK constraint failed/);
-  assert.throws(() => ing(null), /NOT NULL constraint failed/);
-  ing('UN');
+  const colunas = db.prepare('PRAGMA table_info(ingredientes)').all().map((c) => c.name);
+  assert.equal(colunas.includes('unidade_medida'), false);
+  db.prepare('INSERT INTO ingredientes (nome, nome_norm) VALUES (?, ?)').run('Pão', 'pao');
   db.prepare("INSERT INTO categorias (nome, nome_norm) VALUES ('L', 'l')").run();
   const prato = (tempo) => db.prepare('INSERT INTO pratos (categoria_id, nome, nome_norm, preco_cents, tempo_preparo_min) VALUES (1, ?, ?, 100, ?)').run('P', 'p', tempo);
   assert.throws(() => prato(0), /CHECK constraint failed/);

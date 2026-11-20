@@ -2,13 +2,12 @@
 const { test, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { createTestApp } = require('./helpers/createTestApp');
-const { UNIDADES } = require('../src/domain/cardapio/validators');
 
 let app;
 beforeEach(async () => { app = await createTestApp(); });
 afterEach(async () => { await app.close(); });
 
-const criarIngrediente = (nome, extra = {}) => app.request('POST', '/api/ingredientes', { user: 'ADM', body: { nome, unidadeMedida: 'UN', precoAdicionalCents: 0, podeSerAdicional: false, ...extra } });
+const criarIngrediente = (nome, extra = {}) => app.request('POST', '/api/ingredientes', { user: 'ADM', body: { nome, precoAdicionalCents: 0, podeSerAdicional: false, ...extra } });
 
 test('rejeita ingrediente "Pao" quando existe "Pão"', async () => {
   assert.equal((await criarIngrediente('Pão')).status, 200);
@@ -87,14 +86,13 @@ test('criação, alteração e exclusão geram auditoria', async () => {
   assert.deepEqual(linhas.map((l) => l.acao), ['criar', 'alterar', 'excluir']);
 });
 
-test('unidade de medida inválida ou ausente → 400; minúscula é normalizada', async () => {
-  assert.equal((await criarIngrediente('A', { unidadeMedida: 'XX' })).status, 400);
-  assert.equal((await criarIngrediente('B', { unidadeMedida: undefined })).status, 400);
-  assert.equal((await criarIngrediente('C', { unidadeMedida: null })).status, 400);
-  const ok = await criarIngrediente('D', { unidadeMedida: 'porcao' });
+test('ingrediente é cadastrado sem unidade de medida; unidadeMedida enviada é ignorada', async () => {
+  const ok = await criarIngrediente('Arroz Japonês');
   assert.equal(ok.status, 200);
-  assert.equal(ok.body.unidadeMedida, 'PORCAO');
-  for (const u of UNIDADES) assert.equal((await criarIngrediente(`U-${u}`, { unidadeMedida: u })).status, 200, u);
+  assert.equal('unidadeMedida' in ok.body, false);
+  const extra = await criarIngrediente('Shoyu', { unidadeMedida: 'XX' });
+  assert.equal(extra.status, 200);
+  assert.equal('unidadeMedida' in extra.body, false);
 });
 
 test('observação do ingrediente: opcional, até 200 caracteres', async () => {
