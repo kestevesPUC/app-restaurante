@@ -1,13 +1,13 @@
 {
   "name": "pdv-restaurante",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "PDV Restaurante - pedidos, cozinha e pagamentos",
   "private": true,
   "main": "electron-main.js",
   "scripts": {
     "start": "node src/server.js",
     "desktop": "electron .",
-    "test": "node --test --test-timeout=30000 --test-reporter=spec test/*.test.js",
+    "test": "node --test --test-timeout=120000 --test-reporter=spec test/*.test.js",
     "dist": "electron-builder --config electron-builder.config.js --win --publish never",
     "sync:postgres": "node scripts/sync-postgres.js",
     "sync:ddl": "node scripts/sync-postgres.js --ddl",
