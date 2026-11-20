@@ -42,6 +42,7 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
       <label>Código curto<input name="codigo" maxlength="20" autocomplete="off" value="${esc(prato?.codigo ?? '')}"></label>
       <label>Categoria<select name="categoriaId" required>${prato ? '' : '<option value="">Selecione…</option>'}${opcoes}</select></label>
       <label>Preço (R$)<input name="preco" data-mask="dinheiro" inputmode="decimal" autocomplete="off" placeholder="0,00" required value="${esc(centsParaReais(prato?.precoCents))}"></label>
+      <label>Tempo de preparo (min)<input name="tempoPreparo" type="number" min="1" step="1" inputmode="numeric" autocomplete="off" placeholder="Ex.: 15" required value="${esc(prato?.tempoPreparoMin ?? '')}"></label>
       <label class="wide">Descrição<input name="descricao" maxlength="300" autocomplete="off" value="${esc(prato?.descricao ?? '')}"></label>
       <label class="check"><input type="checkbox" name="ativo" ${prato?.ativo ?? true ? 'checked' : ''}>Ativo</label>
       <div class="wide foto-box">
@@ -63,12 +64,15 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
     const precoCents = reaisParaCents(data.preco);
     if (precoCents === null || precoCents <= 0) throw new Error('Preço inválido. Informe um valor em reais maior que zero (ex.: 24,90)');
     if (!data.categoriaId) throw new Error('Informe a categoria');
+    const tempoPreparoMin = Number(String(data.tempoPreparo ?? '').trim());
+    if (!Number.isInteger(tempoPreparoMin) || tempoPreparoMin < 1) throw new Error('Informe o tempo de preparo em minutos (número inteiro maior que zero, ex.: 15)');
     const corpo = {
       nome: data.nome,
       codigo: data.codigo.trim() || null,
       categoriaId: Number(data.categoriaId),
       descricao: data.descricao.trim() || null,
       precoCents,
+      tempoPreparoMin,
       ativo: data.ativo === 'on',
       ingredientes: lista.map((i, ordem) => ({ ingredienteId: i.ingredienteId, removivel: i.removivel, quantidade: (i.quantidade || '').trim() || null, ordem })),
     };
@@ -96,6 +100,10 @@ export function openPratoForm({ prato = null, categorias, ingredientes, reload, 
     $('painel-dados').hidden = nome !== 'dados';
     $('painel-ingr').hidden = nome !== 'ingr';
   };
+  // Campo obrigatório vazio na aba oculta: o navegador barra o envio sem mostrar nada. Volta para a aba dele.
+  dlg.addEventListener('invalid', (event) => {
+    if ($('painel-dados').contains(event.target) && $('painel-dados').hidden) mostrarAba('dados');
+  }, true);
   tabs.forEach((t, i) => {
     t.onclick = () => mostrarAba(t.dataset.tab);
     t.onkeydown = (event) => {

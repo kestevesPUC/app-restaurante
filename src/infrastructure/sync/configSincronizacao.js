@@ -20,7 +20,8 @@ function lerConfiguracaoSincronizacao({ pastas = [], env = process.env } = {}) {
       }
     } catch { /* arquivo ilegível: ignora */ }
   }
-  const pega = (nome) => env[nome] || lidos[nome] || '';
+  // Variável de ambiente definida (mesmo vazia) vence o .env: `SUPABASE_URL=` desliga a cópia num teste local.
+  const pega = (nome) => (env[nome] !== undefined ? env[nome] : lidos[nome]) || '';
   const url = pega('SUPABASE_URL');
   const chave = pega('SUPABASE_SECRET_KEY');
   if (!url || !chave) return null;

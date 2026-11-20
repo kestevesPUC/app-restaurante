@@ -100,6 +100,7 @@ test('configuração: variáveis de ambiente vencem o .env; sem url/chave fica d
   assert.deepEqual(lerConfiguracaoSincronizacao({ pastas: [pasta], env: {} }), { url: 'https://a.supabase.co', chave: 'sb_secret_1', intervaloMs: 2000, puxar: true });
   assert.equal(lerConfiguracaoSincronizacao({ pastas: [pasta], env: { SYNC_PUXAR: '0' } }).puxar, false);
   assert.equal(lerConfiguracaoSincronizacao({ pastas: [pasta], env: { SUPABASE_SECRET_KEY: 'outra' } }).chave, 'outra');
+  assert.equal(lerConfiguracaoSincronizacao({ pastas: [pasta], env: { SUPABASE_URL: '' } }), null); // vazia desliga, não cai no .env
   fs.writeFileSync(path.join(pasta, '.env'), 'SUPABASE_URL=https://a.supabase.co\nSUPABASE_SECRET_KEY=k\n');
   assert.equal(lerConfiguracaoSincronizacao({ pastas: [pasta], env: {} }).intervaloMs, 5000);
 });
